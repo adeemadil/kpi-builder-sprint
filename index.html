@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Safety Analytics - KPI Builder</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f5f7fa;
+      padding: 20px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 {
+      color: #1a4d2e;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+    .subtitle {
+      color: #6b7280;
+      margin-bottom: 30px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .stat-card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      border-left: 4px solid #ff6b35;
+    }
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #1a4d2e;
+      font-family: 'Courier New', monospace;
+    }
+    .stat-label {
+      color: #6b7280;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    .builder {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #374151;
+      font-size: 14px;
+    }
+    select, input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #1a4d2e;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover { background: #15392a; }
+    .chart-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      height: 400px;
+    }
+    .presets {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 15px;
+    }
+    .preset-card {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .preset-card:hover {
+      border-color: #1a4d2e;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .preset-icon {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    .preset-name {
+      font-weight: 600;
+      color: #1a4d2e;
+      margin-bottom: 4px;
+    }
+    .preset-desc {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🛡️ Safety Analytics - KPI Builder</h1>
+    <p class="subtitle">Industrial Safety Monitoring & Analytics Dashboard</p>
+
+    <div class="stats" id="stats">
+      <div class="loading">Loading statistics...</div>
+    </div>
+
+    <h2 style="margin-bottom: 15px; color: #1a4d2e;">📊 KPI Builder</h2>
+    <div class="builder">
+      <div class="controls">
+        <div class="form-group">
+          <label>Metric</label>
+          <select id="metric">
+            <option value="count">Count Events</option>
+            <option value="unique_ids">Unique IDs</option>
+            <option value="avg_speed">Average Speed</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Class Filter</label>
+          <select id="classFilter" multiple size="4">
+            <option value="human" selected>Human</option>
+            <option value="vehicle">Vehicle</option>
+            <option value="pallet_truck">Pallet Truck</option>
+            <option value="agv">AGV</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Vest Filter</label>
+          <select id="vestFilter">
+            <option value="">All</option>
+            <option value="0">No Vest (Violations)</option>
+            <option value="1">With Vest</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Group By</label>
+          <select id="groupBy">
+            <option value="hour">Hour</option>
+            <option value="day">Day</option>
+            <option value="class">Class</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Date From</label>
+          <input type="date" id="dateFrom" value="2025-01-01">
+        </div>
+
+        <div class="form-group">
+          <label>Date To</label>
+          <input type="date" id="dateTo" value="2025-01-07">
+        </div>
+
+        <button onclick="loadChart()">Generate Chart</button>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="chart"></canvas>
+      </div>
+    </div>
+
+    <h2 style="margin: 30px 0 15px; color: #1a4d2e;">⚡ Quick KPIs</h2>
+    <div class="presets">
+      <div class="preset-card" onclick="loadPreset('vest')">
+        <div class="preset-icon">👕</div>
+        <div class="preset-name">Vest Violations</div>
+        <div class="preset-desc">Humans without safety vests</div>
+      </div>
+      <div class="preset-card" onclick="loadPreset('overspeed')">
+        <div class="preset-icon">🚨</div>
+        <div class="preset-name">Overspeeding</div>
+        <div class="preset-desc">Speed violations by class</div>
+      </div>
+      <div class="preset-card" onclick="loadPreset('closecalls')">
+        <div class="preset-icon">⚠️</div>
+        <div class="preset-name">Close Calls</div>
+        <div class="preset-desc">Near-miss incidents</div>
+      </div>
+      <div class="preset-card" onclick="loadPreset('activity')">
+        <div class="preset-icon">📈</div>
+        <div class="preset-name">Human Activity</div>
+        <div class="preset-desc">Activity by hour</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = 'http://localhost:3001/api';
+    let chart = null;
+
+    // Load dashboard stats
+    async function loadStats() {
+      try {
+        const res = await fetch(`${API}/health`);
+        const { recordCount } = await res.json();
+
+        const from = '2025-01-01';
+        const to = '2025-01-07';
+
+        const [violations, overspeed, closeCalls] = await Promise.all([
+          fetch(`${API}/vest-violations?from=${from}&to=${to}`).then(r => r.json()),
+          fetch(`${API}/overspeed?from=${from}&to=${to}&threshold=1.5`).then(r => r.json()),
+          fetch(`${API}/close-calls`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filters: { timeRange: { from, to } }, distance: 2.0 })
+          }).then(r => r.json())
+        ]);
+
+        const totalViolations = violations.series.reduce((sum, d) => sum + d.value, 0);
+        const totalOverspeed = overspeed.series.reduce((sum, d) => sum + d.value, 0);
+        const totalCloseCalls = closeCalls.series.reduce((sum, d) => sum + d.value, 0);
+
+        document.getElementById('stats').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${recordCount.toLocaleString()}</div>
+            <div class="stat-label">Total Detections</div>
+          </div>
+          <div class="stat-card" style="border-left-color: #f7b731;">
+            <div class="stat-value">${totalViolations}</div>
+            <div class="stat-label">Vest Violations</div>
+          </div>
+          <div class="stat-card" style="border-left-color: #ff6b35;">
+            <div class="stat-value">${totalOverspeed}</div>
+            <div class="stat-label">Overspeed Events</div>
+          </div>
+          <div class="stat-card" style="border-left-color: #e74c3c;">
+            <div class="stat-value">${totalCloseCalls}</div>
+            <div class="stat-label">Close Calls</div>
+          </div>
+        `;
+      } catch (err) {
+        console.error('Failed to load stats:', err);
+        document.getElementById('stats').innerHTML = '<div class="loading">⚠️ API not connected</div>';
+      }
+    }
+
+    // Load chart
+    async function loadChart() {
+      const metric = document.getElementById('metric').value;
+      const classes = Array.from(document.getElementById('classFilter').selectedOptions).map(o => o.value);
+      const vest = document.getElementById('vestFilter').value;
+      const groupBy = document.getElementById('groupBy').value;
+      const from = document.getElementById('dateFrom').value;
+      const to = document.getElementById('dateTo').value;
+
+      const body = {
+        metric,
+        filters: {
+          timeRange: { from, to },
+          classes,
+          ...(vest && { vest: parseInt(vest) })
+        },
+        groupBy
+      };
+
+      try {
+        const res = await fetch(`${API}/aggregate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+
+        renderChart(data.series, groupBy, metric);
+      } catch (err) {
+        alert('Failed to load data: ' + err.message);
+      }
+    }
+
+    // Render chart
+    function renderChart(series, groupBy, metric) {
+      const ctx = document.getElementById('chart').getContext('2d');
+      
+      if (chart) chart.destroy();
+
+      const labels = groupBy === 'class' 
+        ? series.map(d => d.label)
+        : series.map(d => d.time);
+      const values = series.map(d => d.value);
+
+      chart = new Chart(ctx, {
+        type: groupBy === 'class' ? 'bar' : 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: metric.replace('_', ' ').toUpperCase(),
+            data: values,
+            backgroundColor: 'rgba(26, 77, 46, 0.2)',
+            borderColor: '#1a4d2e',
+            borderWidth: 3,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: true, position: 'top' }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    // Load presets
+    async function loadPreset(type) {
+      if (type === 'vest') {
+        document.getElementById('metric').value = 'count';
+        document.getElementById('classFilter').value = 'human';
+        document.getElementById('vestFilter').value = '0';
+        document.getElementById('groupBy').value = 'day';
+      } else if (type === 'overspeed') {
+        document.getElementById('metric').value = 'count';
+        document.getElementById('classFilter').selectedIndex = -1;
+        Array.from(document.getElementById('classFilter').options).forEach(o => o.selected = true);
+        document.getElementById('vestFilter').value = '';
+        document.getElementById('groupBy').value = 'class';
+      } else if (type === 'closecalls') {
+        const from = document.getElementById('dateFrom').value;
+        const to = document.getElementById('dateTo').value;
+        const res = await fetch(`${API}/close-calls`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filters: { timeRange: { from, to } }, distance: 2.0 })
+        });
+        const data = await res.json();
+        renderChart(data.series, 'hour', 'Close Calls');
+        return;
+      } else if (type === 'activity') {
+        document.getElementById('metric').value = 'count';
+        document.getElementById('classFilter').value = 'human';
+        document.getElementById('vestFilter').value = '';
+        document.getElementById('groupBy').value = 'hour';
+      }
+      
+      loadChart();
+    }
+
+    // Initialize
+    loadStats();
+    loadChart();
+  </script>
+</body>
+</html>

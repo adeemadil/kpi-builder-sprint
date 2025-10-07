@@ -25,7 +25,7 @@ def main():
     # Standardize column names
     rename_map = {}
     for c in df.columns:
-        if c.lower() in ['class_name','label']:
+        if c.lower() in ['class_name','label','type']:  # Add 'type' here
             rename_map[c] = 'class'
     df = df.rename(columns=rename_map)
     # Ensure required columns exist
