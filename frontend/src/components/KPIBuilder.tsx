@@ -16,6 +16,10 @@ interface KPIBuilderProps {
   initialConfig?: KPIConfig;
 }
 
+// Local API response types to avoid using any
+type ApiSeriesItem = { label?: string; time?: string; value?: number; timestamp?: string };
+type ApiResponse = { series?: ApiSeriesItem[] };
+
 export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   const [aggregatedData, setAggregatedData] = useState<{label: string; value: number; timestamp?: string}[]>([]);
   const [isQuerying, setIsQuerying] = useState(false);
@@ -25,7 +29,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   
   // KPI Configuration State
   const [metric, setMetric] = useState<MetricType>(initialConfig?.metric || 'count');
-  const [timePreset, setTimePreset] = useState<string>('24h');
+  const [timePreset, setTimePreset] = useState<string>('data-day');
   const [customTimeRange, setCustomTimeRange] = useState<{ from: Date; to: Date }>({
     from: new Date('2025-04-02T00:00:00.000Z'),
     to: new Date('2025-04-02T23:59:59.999Z'),
@@ -36,7 +40,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   const [speedThreshold, setSpeedThreshold] = useState<number>(1.5);
   const [distanceThreshold, setDistanceThreshold] = useState<number>(2.0);
   const [groupBy, setGroupBy] = useState<GroupByType>(initialConfig?.groupBy || 'time_bucket');
-  const [timeBucket, setTimeBucket] = useState<'1min' | '5min' | '1hour' | '1day'>('1hour');
+  const [timeBucket, setTimeBucket] = useState<'1min' | '5min' | '1hour' | '1day'>('5min');
   const [chartType, setChartType] = useState<'line' | 'area' | 'bar' | 'table'>('line');
   const [isLoading, setIsLoading] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -67,27 +71,31 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   useEffect(() => {
     // Skip when loading from a saved KPI/config or when using a custom preset
     if (isLoadingFromConfig.current || timePreset === 'custom') return;
-    const now = new Date();
+    
     let from: Date;
+    let to: Date;
 
     switch (timePreset) {
-      case '1h':
-        from = new Date(now.getTime() - 60 * 60 * 1000);
+      case 'data-period':
+        // Full data period: 15:42:06 to 16:00:18 on April 2, 2025
+        from = new Date('2025-04-02T15:42:06.000Z');
+        to = new Date('2025-04-02T16:00:18.000Z');
         break;
-      case '24h':
-        from = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      case 'data-hour':
+        // Data hour: 15:00 to 16:00 on April 2, 2025
+        from = new Date('2025-04-02T15:00:00.000Z');
+        to = new Date('2025-04-02T16:00:00.000Z');
         break;
-      case '7d':
-        from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case '30d':
-        from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      case 'data-day':
+        // Full day: April 2, 2025 (00:00 to 23:59)
+        from = new Date('2025-04-02T00:00:00.000Z');
+        to = new Date('2025-04-02T23:59:59.999Z');
         break;
       default:
         return;
     }
 
-    setCustomTimeRange({ from, to: now });
+    setCustomTimeRange({ from, to });
   }, [timePreset]);
 
   // Build KPI configuration - memoized to prevent unnecessary re-renders
@@ -116,53 +124,62 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     setQueryError(null);
 
     try {
+      // Ensure Date objects for timeRange (guard against strings in initialConfig)
+      const fromDate = new Date(kpiConfig.filters.timeRange.from as unknown as string | number | Date);
+      const toDate = new Date(kpiConfig.filters.timeRange.to as unknown as string | number | Date);
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        throw new Error('Invalid time range');
+      }
       // Map KPI config to API request format
       const apiRequest = {
         metric: kpiConfig.metric,
         filters: {
           timeRange: {
-            from: kpiConfig.filters.timeRange.from.toISOString(),
-            to: kpiConfig.filters.timeRange.to.toISOString(),
+            from: fromDate.toISOString(),
+            to: toDate.toISOString(),
           },
           classes: kpiConfig.filters.classes,
           vest: kpiConfig.filters.vest === 'all' ? undefined : kpiConfig.filters.vest,
           speedMin: kpiConfig.filters.speedMin,
         },
         groupBy: (kpiConfig.groupBy === 'time_bucket' ? 
-                 (timeBucket === '1day' ? 'day' : 'hour') : 
-                 kpiConfig.groupBy === 'class' ? 'class' : 'hour') as 'hour' | 'day' | 'class',
+                 (timeBucket === '1day' ? 'day' : 
+                  timeBucket === '1hour' ? 'hour' :
+                  timeBucket === '5min' ? '5min' :
+                  timeBucket === '1min' ? '1min' : '5min') : 
+                 kpiConfig.groupBy === 'class' ? 'class' : '5min') as 'hour' | 'day' | 'class' | '5min' | '1min',
       };
       
-      let results: any;
+      let results: ApiResponse;
       if (kpiConfig.metric === 'close_calls') {
         results = await api.closeCalls({ timeRange: {
-          from: kpiConfig.filters.timeRange.from.toISOString(),
-          to: kpiConfig.filters.timeRange.to.toISOString(),
+          from: fromDate.toISOString(),
+          to: toDate.toISOString(),
         } }, distanceThreshold);
       } else if (kpiConfig.metric === 'vest_violations') {
         results = await api.vestViolations(
-          kpiConfig.filters.timeRange.from.toISOString(),
-          kpiConfig.filters.timeRange.to.toISOString(),
+          fromDate.toISOString(),
+          toDate.toISOString(),
         );
       } else if (kpiConfig.metric === 'overspeed') {
         results = await api.overspeed(
-          kpiConfig.filters.timeRange.from.toISOString(),
-          kpiConfig.filters.timeRange.to.toISOString(),
+          fromDate.toISOString(),
+          toDate.toISOString(),
           speedThreshold,
         );
       } else if (kpiConfig.metric === 'rate') {
         // For rate, use count and calculate rate manually
-        const countResults = await api.aggregate({
+        const countResults = (await api.aggregate({
           ...apiRequest,
           metric: 'count'
-        });
+        })) as ApiResponse;
         // Calculate rate (events per hour)
         const timeRangeHours = 
-          (kpiConfig.filters.timeRange.to.getTime() - kpiConfig.filters.timeRange.from.getTime()) / (1000 * 60 * 60);
+          (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60);
         results = {
-          series: countResults.series?.map((item: any) => ({
+          series: countResults.series?.map((item: ApiSeriesItem) => ({
             ...item,
-            value: item.value / Math.max(timeRangeHours, 1)
+            value: (item.value ?? 0) / Math.max(timeRangeHours, 1)
           })) || []
         };
       } else {
@@ -177,9 +194,9 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       }
       
       // Transform API response to match expected format
-      const transformedData = results.series?.map((item: any) => ({
+      const transformedData = results.series?.map((item: ApiSeriesItem) => ({
         label: item.label || item.time || 'Unknown',
-        value: item.value || 0,
+        value: item.value ?? 0,
         timestamp: item.time || item.timestamp,
       })) || [];
       
@@ -282,10 +299,10 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1h">Last Hour</SelectItem>
-                    <SelectItem value="24h">Last 24 Hours</SelectItem>
-                    <SelectItem value="7d">Last 7 Days</SelectItem>
-                    <SelectItem value="30d">Last 30 Days</SelectItem>
+                    <SelectItem value="data-period">Full Data Period (18 min)</SelectItem>
+                    <SelectItem value="data-hour">Data Hour (15:00-16:00)</SelectItem>
+                    <SelectItem value="data-day">Full Day (April 2, 2025)</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -362,7 +379,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
               {(metric === 'vest_violations' || selectedClasses.includes('human')) && (
                 <div className="space-y-2">
                   <Label>Vest Status</Label>
-                  <Select value={String(vestFilter)} onValueChange={(v) => setVestFilter(v as any)}>
+                  <Select value={String(vestFilter)} onValueChange={(v) => setVestFilter(v === 'all' ? 'all' : (v === '1' ? 1 : 0))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -427,7 +444,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
               </Select>
 
               {groupBy === 'time_bucket' && (
-                <Select value={timeBucket} onValueChange={(v) => setTimeBucket(v as any)}>
+                <Select value={timeBucket} onValueChange={(v) => setTimeBucket(v as '1min' | '5min' | '1hour' | '1day')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

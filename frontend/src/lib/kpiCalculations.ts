@@ -1,5 +1,5 @@
 import { calculateCloseCalls } from './closeCallsCalculation';
-import { UnifiedDetection } from './dataAdapter';
+import type { UnifiedDetection } from './dataAdapter';
 
 export type MetricType =
   | 'count' 
@@ -104,14 +104,15 @@ export function calculateMetric(
       if (data.length === 0) return 0;
       return data.reduce((sum, d) => sum + d.speed, 0) / data.length;
     
-    case 'rate':
+    case 'rate': {
       // Events per hour
       if (data.length === 0) return 0;
       const timeRangeHours = 
         (filters.timeRange.to.getTime() - filters.timeRange.from.getTime()) / (1000 * 60 * 60);
       return data.length / Math.max(timeRangeHours, 1);
+    }
     
-    case 'close_calls':
+    case 'close_calls': {
       const closeCalls = calculateCloseCalls(
         filterData(allData, { ...filters, classes: [] }), // Need all classes for close calls
         filters.distanceThreshold || 2.0
@@ -120,6 +121,7 @@ export function calculateMetric(
         const ccTime = new Date(cc.timestamp);
         return ccTime >= filters.timeRange.from && ccTime <= filters.timeRange.to;
       }).length;
+    }
     
     case 'vest_violations':
       return data.filter(d => d.type === 'human' && d.vest === 0).length;
@@ -161,16 +163,17 @@ export function groupData(
         key = detection.id;
         break;
       
-      case 'time_bucket':
+      case 'time_bucket': {
         const date = new Date(detection.timestamp);
         switch (timeBucket) {
           case '1min':
             key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
             break;
-          case '5min':
+          case '5min': {
             const minutes5 = Math.floor(date.getMinutes() / 5) * 5;
             key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(minutes5).padStart(2, '0')}`;
             break;
+          }
           case '1hour':
             key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
             break;
@@ -180,6 +183,7 @@ export function groupData(
             break;
         }
         break;
+      }
       
       default:
         key = 'Unknown';

@@ -35,6 +35,15 @@ function buildDetectionsWhere(filters: any | undefined) {
     where.push(`class IN (${placeholders.join(',')})`);
   }
 
+  // areas: string[]
+  if (Array.isArray(filters.areas) && filters.areas.length > 0) {
+    const placeholders = filters.areas.map((a: string) => {
+      params.push(a);
+      return `$${params.length}`;
+    });
+    where.push(`area IN (${placeholders.join(',')})`);
+  }
+
   // vest: 0 | 1
   if (filters.vest === 0 || filters.vest === 1) {
     params.push(filters.vest);
@@ -105,7 +114,7 @@ router.post('/aggregate', async (req: Request, res: Response) => {
 
     // Validate inputs
     const allowedMetrics = ['count', 'unique_ids', 'avg_speed'] as const;
-    const allowedGroups = ['hour', 'day', 'class'] as const;
+    const allowedGroups = ['hour', 'day', 'class', '5min', '1min'] as const;
     if (!allowedMetrics.includes(metric)) {
       return res.status(400).json({ error: 'Invalid metric' });
     }
@@ -122,6 +131,12 @@ router.post('/aggregate', async (req: Request, res: Response) => {
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else if (groupBy === 'day') {
       groupExpr = `date_trunc('day', t)`;
+      selectTimeOrLabel = `${groupExpr} AS time`;
+    } else if (groupBy === '5min') {
+      groupExpr = `date_trunc('minute', t) + INTERVAL '5 minutes' * FLOOR(EXTRACT(minute FROM t) / 5)`;
+      selectTimeOrLabel = `${groupExpr} AS time`;
+    } else if (groupBy === '1min') {
+      groupExpr = `date_trunc('minute', t)`;
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else {
       groupExpr = `class`;

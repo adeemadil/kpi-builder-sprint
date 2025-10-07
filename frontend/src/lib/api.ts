@@ -43,7 +43,7 @@ interface SeriesDataPoint {
 interface AggregateRequest {
   metric: 'count' | 'unique_ids' | 'avg_speed';
   filters?: DetectionFilters;
-  groupBy: 'hour' | 'day' | 'class';
+  groupBy: 'hour' | 'day' | 'class' | '5min' | '1min';
 }
 
 async function fetchJSON(endpoint: string, options?: RequestInit) {

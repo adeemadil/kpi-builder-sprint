@@ -37,16 +37,17 @@ export function aggregateMultiSeries(
       let key: string;
 
       switch (groupBy) {
-        case 'time_bucket':
+        case 'time_bucket': {
           const date = new Date(detection.timestamp);
           switch (timeBucket) {
             case '1min':
               key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
               break;
-            case '5min':
+            case '5min': {
               const minutes5 = Math.floor(date.getMinutes() / 5) * 5;
               key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(minutes5).padStart(2, '0')}`;
               break;
+            }
             case '1hour':
               key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:00`;
               break;
@@ -56,6 +57,7 @@ export function aggregateMultiSeries(
               break;
           }
           break;
+        }
         case 'area':
           key = `Area ${detection.area}`;
           break;
