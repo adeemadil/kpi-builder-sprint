@@ -1,4 +1,14 @@
-const API_BASE = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api';
+function normalizeApiBase(raw: string): string {
+  // Remove trailing slashes
+  let base = (raw || '').trim().replace(/\/+$/, '');
+  // Ensure it ends with /api
+  if (!/\/(api)$/.test(base)) {
+    base += '/api';
+  }
+  return base;
+}
+
+const API_BASE = normalizeApiBase((import.meta as ImportMeta).env?.VITE_API_URL || 'http://localhost:3001/api');
 
 interface TimeRange {
   from: string;
@@ -13,6 +23,23 @@ interface DetectionFilters {
   speedMax?: number;
 }
 
+interface Detection {
+  id: string;
+  class: string;
+  t: string;
+  x: number;
+  y: number;
+  speed?: number;
+  heading?: number;
+  vest?: number;
+}
+
+interface SeriesDataPoint {
+  time?: string;
+  label?: string;
+  value: number;
+}
+
 interface AggregateRequest {
   metric: 'count' | 'unique_ids' | 'avg_speed';
   filters?: DetectionFilters;
@@ -20,19 +47,41 @@ interface AggregateRequest {
 }
 
 async function fetchJSON(endpoint: string, options?: RequestInit) {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const url = `${API_BASE}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+
+  // Debug: request
+  console.log('🔵 API Call:', {
+    url,
+    method: options?.method || 'GET',
+    // Safely log JSON body if provided
+    body: options?.body ? (() => { try { return JSON.parse(options.body as string); } catch { return String(options.body); } })() : null,
+  });
+
+  const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
     },
     ...options,
   });
+
+  // Debug: response status
+  console.log('📊 Response:', {
+    url,
+    status: response.status,
+    statusText: response.statusText,
+  });
   
   if (!response.ok) {
-    throw new Error(`API Error: ${response.statusText}`);
+    const errorText = await response.text().catch(() => '');
+    // Debug: error body
+    console.error('❌ API Error:', { url, status: response.status, error: errorText });
+    throw new Error(`API Error ${response.status}: ${errorText || response.statusText}`);
   }
   
-  return response.json();
+  const data = await response.json();
+  console.log('✅ API Success:', { url, keys: data && typeof data === 'object' ? Object.keys(data) : null });
+  return data;
 }
 
 export const api = {
@@ -68,5 +117,4 @@ export const api = {
   overspeed: (from: string, to: string, threshold = 1.5) =>
     fetchJSON(`/overspeed?from=${from}&to=${to}&threshold=${threshold}`),
 };
-
-
+export type { Detection, SeriesDataPoint, DetectionFilters, AggregateRequest, TimeRange };

@@ -17,7 +17,7 @@ interface KPIBuilderProps {
 }
 
 export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
-  const [aggregatedData, setAggregatedData] = useState<any[]>([]);
+  const [aggregatedData, setAggregatedData] = useState<{label: string; value: number; timestamp?: string}[]>([]);
   const [isQuerying, setIsQuerying] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [hasApplied, setHasApplied] = useState(false);
@@ -27,10 +27,10 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   const [metric, setMetric] = useState<MetricType>(initialConfig?.metric || 'count');
   const [timePreset, setTimePreset] = useState<string>('24h');
   const [customTimeRange, setCustomTimeRange] = useState<{ from: Date; to: Date }>({
-    from: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    to: new Date(),
+    from: new Date('2025-04-02T00:00:00.000Z'),
+    to: new Date('2025-04-02T23:59:59.999Z'),
   });
-  const [selectedClasses, setSelectedClasses] = useState<string[]>(initialConfig?.filters.classes || ['human', 'vehicle', 'pallet_truck', 'agv']);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>(initialConfig?.filters.classes || ['human', 'vehicle']);
   const [selectedAreas, setSelectedAreas] = useState<string[]>(initialConfig?.filters.areas || []);
   const [vestFilter, setVestFilter] = useState<0 | 1 | 'all'>('all');
   const [speedThreshold, setSpeedThreshold] = useState<number>(1.5);
@@ -53,6 +53,8 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       setDistanceThreshold(initialConfig.filters.distanceThreshold ?? 2.0);
       setGroupBy(initialConfig.groupBy);
       setTimeBucket(initialConfig.timeBucket || '1hour');
+      // Important: mark preset as custom so the preset effect does not overwrite loaded dates
+      setTimePreset('custom');
       setCustomTimeRange(initialConfig.filters.timeRange);
       // Reset flag after all updates complete
       setTimeout(() => {
@@ -63,6 +65,8 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
 
   // Calculate time range based on preset
   useEffect(() => {
+    // Skip when loading from a saved KPI/config or when using a custom preset
+    if (isLoadingFromConfig.current || timePreset === 'custom') return;
     const now = new Date();
     let from: Date;
 
@@ -124,18 +128,59 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
           vest: kpiConfig.filters.vest === 'all' ? undefined : kpiConfig.filters.vest,
           speedMin: kpiConfig.filters.speedMin,
         },
-        groupBy: kpiConfig.groupBy === 'time_bucket' ? 'hour' : 
-                 kpiConfig.groupBy === 'class' ? 'class' : 
-                 kpiConfig.groupBy === 'none' ? 'class' : 'hour',
+        groupBy: (kpiConfig.groupBy === 'time_bucket' ? 
+                 (timeBucket === '1day' ? 'day' : 'hour') : 
+                 kpiConfig.groupBy === 'class' ? 'class' : 'hour') as 'hour' | 'day' | 'class',
       };
       
-      const results = await api.aggregate(apiRequest);
+      let results: any;
+      if (kpiConfig.metric === 'close_calls') {
+        results = await api.closeCalls({ timeRange: {
+          from: kpiConfig.filters.timeRange.from.toISOString(),
+          to: kpiConfig.filters.timeRange.to.toISOString(),
+        } }, distanceThreshold);
+      } else if (kpiConfig.metric === 'vest_violations') {
+        results = await api.vestViolations(
+          kpiConfig.filters.timeRange.from.toISOString(),
+          kpiConfig.filters.timeRange.to.toISOString(),
+        );
+      } else if (kpiConfig.metric === 'overspeed') {
+        results = await api.overspeed(
+          kpiConfig.filters.timeRange.from.toISOString(),
+          kpiConfig.filters.timeRange.to.toISOString(),
+          speedThreshold,
+        );
+      } else if (kpiConfig.metric === 'rate') {
+        // For rate, use count and calculate rate manually
+        const countResults = await api.aggregate({
+          ...apiRequest,
+          metric: 'count'
+        });
+        // Calculate rate (events per hour)
+        const timeRangeHours = 
+          (kpiConfig.filters.timeRange.to.getTime() - kpiConfig.filters.timeRange.from.getTime()) / (1000 * 60 * 60);
+        results = {
+          series: countResults.series?.map((item: any) => ({
+            ...item,
+            value: item.value / Math.max(timeRangeHours, 1)
+          })) || []
+        };
+      } else {
+        // For count, unique_ids, avg_speed - use aggregate directly
+        const supportedMetric = kpiConfig.metric === 'count' || kpiConfig.metric === 'unique_ids' || kpiConfig.metric === 'avg_speed' 
+          ? kpiConfig.metric 
+          : 'count';
+        results = await api.aggregate({
+          ...apiRequest,
+          metric: supportedMetric
+        });
+      }
       
       // Transform API response to match expected format
       const transformedData = results.series?.map((item: any) => ({
-        label: item.class || item.hour || item.label || 'Unknown',
-        value: item.count || item.value || 0,
-        timestamp: item.hour || item.timestamp,
+        label: item.label || item.time || 'Unknown',
+        value: item.value || 0,
+        timestamp: item.time || item.timestamp,
       })) || [];
       
       setAggregatedData(transformedData);
@@ -148,19 +193,24 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     }
   };
 
-  // Load initial config data
+  // Load initial config data when initialConfig changes
   useEffect(() => {
     if (initialConfig) {
-      handleApplyFilters();
+      // Reset state to ensure fresh data
+      setAggregatedData([]);
+      setHasApplied(false);
+      // Apply filters after a brief delay to ensure state updates complete
+      setTimeout(() => {
+        handleApplyFilters();
+      }, 100);
     }
-  }, []);
+  }, [initialConfig]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const allClasses = ['human', 'vehicle', 'pallet_truck', 'agv'];
+  const allClasses = ['human', 'vehicle'];
 
-  // Available areas (hardcoded from schema, or could be fetched)
+  // Available areas (from actual data)
   const availableAreas = useMemo(() => {
-    // TODO: Could fetch unique areas from backend if needed
-    return ['A1', 'A2', 'B1', 'B2', 'C1'];
+    return ['1', '2', '3', '4', '5', '7', '8', '9', '11', '12', '13'];
   }, []);
 
   const toggleClass = (className: string) => {
@@ -476,6 +526,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
 
         {/* Chart Preview */}
         <ChartPreview
+          key={`${metric}-${groupBy}-${JSON.stringify(kpiConfig.filters)}`}
           data={aggregatedData}
           multiSeriesData={[]}
           seriesKeys={[]}

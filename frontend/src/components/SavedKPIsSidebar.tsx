@@ -29,8 +29,8 @@ const exampleKPIs: SavedKPI[] = [
       metric: 'vest_violations',
       filters: {
         timeRange: {
-          from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          to: new Date(),
+          from: new Date('2025-04-02T00:00:00.000Z'),
+          to: new Date('2025-04-02T23:59:59.999Z'),
         },
         classes: ['human'],
         vest: 0,
@@ -38,7 +38,7 @@ const exampleKPIs: SavedKPI[] = [
       groupBy: 'time_bucket',
       timeBucket: '1day',
     },
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date('2025-04-02T15:45:00.000Z').toISOString(),
   },
   {
     id: 'example-2',
@@ -49,16 +49,16 @@ const exampleKPIs: SavedKPI[] = [
       metric: 'overspeed',
       filters: {
         timeRange: {
-          from: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          to: new Date(),
+          from: new Date('2025-04-02T00:00:00.000Z'),
+          to: new Date('2025-04-02T23:59:59.999Z'),
         },
-        classes: ['vehicle', 'pallet_truck'],
+        classes: ['vehicle'],
         speedMin: 1.5,
       },
       groupBy: 'time_bucket',
       timeBucket: '1hour',
     },
-    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date('2025-04-02T15:50:00.000Z').toISOString(),
   },
   {
     id: 'example-3',
@@ -69,8 +69,8 @@ const exampleKPIs: SavedKPI[] = [
       metric: 'close_calls',
       filters: {
         timeRange: {
-          from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-          to: new Date(),
+          from: new Date('2025-04-02T00:00:00.000Z'),
+          to: new Date('2025-04-02T23:59:59.999Z'),
         },
         classes: [],
         distanceThreshold: 2.0,
@@ -78,7 +78,7 @@ const exampleKPIs: SavedKPI[] = [
       groupBy: 'time_bucket',
       timeBucket: '1day',
     },
-    createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    createdAt: new Date('2025-04-02T15:55:00.000Z').toISOString(),
   },
   {
     id: 'example-4',
@@ -89,15 +89,15 @@ const exampleKPIs: SavedKPI[] = [
       metric: 'count',
       filters: {
         timeRange: {
-          from: new Date(Date.now() - 24 * 60 * 60 * 1000),
-          to: new Date(),
+          from: new Date('2025-04-02T00:00:00.000Z'),
+          to: new Date('2025-04-02T23:59:59.999Z'),
         },
         classes: ['human'],
       },
       groupBy: 'time_bucket',
       timeBucket: '1hour',
     },
-    createdAt: new Date().toISOString(),
+    createdAt: new Date('2025-04-02T23:59:59.999Z').toISOString(),
   },
 ];
 
@@ -135,7 +135,7 @@ export function SavedKPIsSidebar({ onLoadKPI }: SavedKPIsSidebarProps) {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    const now = new Date();
+    const now = new Date('2025-04-02T23:59:59.999Z');
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 

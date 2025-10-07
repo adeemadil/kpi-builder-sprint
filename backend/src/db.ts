@@ -5,7 +5,11 @@ import readline from 'readline';
 
 // Initialize a connection pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT) || 5432,
+  database: process.env.DB_NAME || 'kpi_builder',
+  user: process.env.DB_USER || 'kpi_user',
+  password: process.env.DB_PASSWORD || 'kpi_password',
   max: 10,
   idleTimeoutMillis: 30000,
 });

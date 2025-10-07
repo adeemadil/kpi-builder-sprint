@@ -15,15 +15,15 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
     const loadDashboardData = async () => {
       setIsLoading(true);
       try {
-        const now = new Date();
-        const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const now = new Date('2025-04-03T00:00:00.000Z'); // Use data range
+        const last24h = new Date('2025-04-02T00:00:00.000Z'); // Previous day in data
 
         // Query total detections
         const totalResult = await api.aggregate({
           metric: 'count',
           filters: {
             timeRange: { from: new Date(0).toISOString(), to: now.toISOString() },
-            classes: ['human', 'vehicle', 'pallet_truck', 'agv'],
+            classes: ['human', 'vehicle'],
           },
           groupBy: 'class',
         });
@@ -33,7 +33,7 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
           metric: 'unique_ids',
           filters: {
             timeRange: { from: new Date(0).toISOString(), to: now.toISOString() },
-            classes: ['human', 'vehicle', 'pallet_truck', 'agv'],
+            classes: ['human', 'vehicle'],
           },
           groupBy: 'class',
         });
@@ -49,7 +49,7 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
           metric: 'count',
           filters: {
             timeRange: { from: new Date(0).toISOString(), to: now.toISOString() },
-            classes: ['human', 'vehicle', 'pallet_truck', 'agv'],
+            classes: ['human', 'vehicle'],
           },
           groupBy: 'class',
         });
@@ -59,21 +59,21 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
           metric: 'count',
           filters: {
             timeRange: { from: last24h.toISOString(), to: now.toISOString() },
-            classes: ['human', 'vehicle', 'pallet_truck', 'agv'],
+            classes: ['human', 'vehicle'],
           },
           groupBy: 'hour',
         });
 
         setStats({
-          totalDetections: totalResult.series?.reduce((sum: number, item: any) => sum + (item.count || 0), 0) || 0,
-          uniqueAssets: uniqueResult.series?.reduce((sum: number, item: any) => sum + (item.count || 0), 0) || 0,
-          vestViolations: vestResult.count || 0,
+          totalDetections: totalResult.series?.reduce((sum: number, item: any) => sum + (item.value || 0), 0) || 0,
+          uniqueAssets: uniqueResult.series?.reduce((sum: number, item: any) => sum + (item.value || 0), 0) || 0,
+          vestViolations: vestResult.series?.reduce((sum: number, item: any) => sum + (item.value || 0), 0) || 0,
         });
 
-        setClassDistribution(classResult.series?.map((r: any) => ({ name: r.class, value: r.count })) || []);
+        setClassDistribution(classResult.series?.map((r: any) => ({ name: r.label, value: r.value })) || []);
         setRecentActivity(activityResult.series?.map((r: any) => ({ 
-          hour: r.hour || r.label, 
-          count: r.count 
+          hour: r.time || r.label, 
+          count: r.value 
         })) || []);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
