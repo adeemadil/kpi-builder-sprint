@@ -1,0 +1,22 @@
+# Node / build artifacts
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript build output
+/dist
+
+# Local env files (not copied to image)
+.env
+.env.*
+
+# Editor/OS files
+.DS_Store
+.idea
+.vscode
+
+# Tests, docs
+coverage
+*.md
