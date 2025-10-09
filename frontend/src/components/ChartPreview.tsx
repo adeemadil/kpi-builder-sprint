@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AggregatedData, KPIConfig, MetricType } from '@/lib/kpiCalculations';
 import { MultiSeriesData } from '@/lib/multiSeriesAggregation';
+import { useMemo } from 'react';
 import {
   LineChart,
   Line,
@@ -19,6 +20,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatTimestamp, formatTooltipLabel } from '@/lib/dateUtils';
 
 interface ChartPreviewProps {
   data: AggregatedData[];
@@ -43,7 +45,14 @@ const metricLabels: Record<MetricType, string> = {
 export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isLoading, metric, config }: ChartPreviewProps) {
   const metricLabel = metricLabels[metric];
   const useMultiSeries = multiSeriesData && multiSeriesData.length > 0 && seriesKeys && seriesKeys.length > 1;
-  const displayData = useMultiSeries ? multiSeriesData : data;
+  // Memoized data formatting to prevent unnecessary re-renders
+  const displayData = useMemo(() => {
+    const dataToFormat = useMultiSeries ? (multiSeriesData || []) : data;
+    return dataToFormat.map(item => ({
+      ...item,
+      label: formatTimestamp(item.label, config.groupBy)
+    }));
+  }, [data, multiSeriesData, useMultiSeries, config.groupBy]);
   
   // Chart colors for different series
   const colors = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
@@ -184,6 +193,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '0.5rem',
                   }}
+                  labelFormatter={(label) => formatTooltipLabel(data.find(d => d.label === label)?.timestamp || label)}
                 />
                 <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}
@@ -236,6 +246,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '0.5rem',
                   }}
+                  labelFormatter={(label) => formatTooltipLabel(data.find(d => d.label === label)?.timestamp || label)}
                 />
                 <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}
@@ -288,6 +299,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '0.5rem',
                   }}
+                  labelFormatter={(label) => formatTooltipLabel(data.find(d => d.label === label)?.timestamp || label)}
                 />
                 <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}

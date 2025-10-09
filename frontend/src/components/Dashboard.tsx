@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { formatTimestamp, formatTooltipLabel } from '@/lib/dateUtils';
 
 export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
   const [stats, setStats] = useState({ totalDetections: 0, uniqueAssets: 0, vestViolations: 0 });
@@ -15,8 +16,8 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
     const loadDashboardData = async () => {
       setIsLoading(true);
       try {
-        const now = new Date('2025-04-02T16:00:18.000Z'); // End of our data range
-        const last24h = new Date('2025-04-02T15:42:06.000Z'); // Start of our data range
+        const now = new Date('2025-04-02T16:00:18.200Z'); // End of our data range
+        const last24h = new Date('2025-04-02T15:42:06.435Z'); // Start of our data range
 
         // Query total detections
         const totalResult = await api.aggregate({
@@ -72,8 +73,9 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
 
         setClassDistribution(classResult.series?.map((r: any) => ({ name: r.label, value: r.value })) || []);
         setRecentActivity(activityResult.series?.map((r: any) => ({ 
-          hour: r.time || r.label, 
-          count: r.value 
+          hour: formatTimestamp(r.time || r.label, 'hour'), 
+          count: r.value,
+          timestamp: r.time || r.label
         })) || []);
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
@@ -128,7 +130,7 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalDetections.toLocaleString()}</div>
               <p className="text-xs text-muted-foreground mt-1">
-                All time
+                April 2, 2025
               </p>
             </CardContent>
           </Card>
@@ -208,7 +210,8 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
 
         <Card className="border-none shadow-md">
           <CardHeader>
-            <CardTitle>Activity Last 24 Hours</CardTitle>
+            <CardTitle>Activity by Hour (April 2, 2025)</CardTitle>
+            <p className="text-sm text-muted-foreground">Data from 15:42:06 to 16:00:18 UTC</p>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -221,7 +224,8 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
                     backgroundColor: 'hsl(var(--card))', 
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '0.5rem'
-                  }} 
+                  }}
+                  labelFormatter={(label) => formatTooltipLabel(recentActivity.find(d => d.hour === label)?.timestamp || label)}
                 />
                 <Bar dataKey="count" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
               </BarChart>

@@ -156,6 +156,14 @@ router.post('/aggregate', async (req: Request, res: Response) => {
       ORDER BY ${groupExpr} ASC
     `;
 
+    console.log('[API /aggregate] SQL Query:', {
+      metric,
+      groupBy,
+      whereSql,
+      params,
+      fullQuery: sql.replace(/\s+/g, ' ').trim()
+    });
+
     const rows = await db.query(sql, params);
 
     const totalRow = await db.queryOne(`SELECT COUNT(*) AS count FROM detections`);

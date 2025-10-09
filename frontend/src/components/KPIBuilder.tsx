@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,11 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
 
+  // Log chart type changes for debugging
+  useEffect(() => {
+    console.log('[KPIBuilder] Chart type changed to:', chartType, 'with', aggregatedData.length, 'data points');
+  }, [chartType, aggregatedData.length]);
+
   // Load initial config when it changes
   useEffect(() => {
     if (initialConfig) {
@@ -60,11 +65,18 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       // Important: mark preset as custom so the preset effect does not overwrite loaded dates
       setTimePreset('custom');
       setCustomTimeRange(initialConfig.filters.timeRange);
+      setHasApplied(false); // Reset to allow auto-apply
       // Reset flag after all updates complete
       setTimeout(() => {
         isLoadingFromConfig.current = false;
       }, 0);
     }
+    
+    // Cleanup function to prevent stale data
+    return () => {
+      setAggregatedData([]);
+      setHasApplied(false);
+    };
   }, [initialConfig]);
 
   // Calculate time range based on preset
@@ -77,9 +89,9 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
 
     switch (timePreset) {
       case 'data-period':
-        // Full data period: 15:42:06 to 16:00:18 on April 2, 2025
-        from = new Date('2025-04-02T15:42:06.000Z');
-        to = new Date('2025-04-02T16:00:18.000Z');
+        // Full data period: 15:42:06.435 to 16:00:18.180 on April 2, 2025
+        from = new Date('2025-04-02T15:42:06.435Z');
+        to = new Date('2025-04-02T16:00:18.200Z');
         break;
       case 'data-hour':
         // Data hour: 15:00 to 16:00 on April 2, 2025
@@ -114,7 +126,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   }), [metric, customTimeRange, selectedClasses, selectedAreas, vestFilter, speedThreshold, distanceThreshold, groupBy, timeBucket]);
 
   // Apply filters and query backend
-  const handleApplyFilters = async () => {
+  const handleApplyFilters = useCallback(async () => {
     if (selectedClasses.length === 0) {
       setQueryError('Please select at least one class');
       return;
@@ -130,6 +142,27 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
         throw new Error('Invalid time range');
       }
+      // Transform UI groupBy to backend format
+      const transformedGroupBy = (kpiConfig.groupBy === 'time_bucket' ? 
+                 (timeBucket === '1day' ? 'day' : 
+                  timeBucket === '1hour' ? 'hour' :
+                  timeBucket === '5min' ? '5min' :
+                  timeBucket === '1min' ? '1min' : '5min') : 
+                 kpiConfig.groupBy === 'class' ? 'class' : '5min') as 'hour' | 'day' | 'class' | '5min' | '1min';
+
+      console.log('[KPIBuilder] Transform mapping:', {
+        uiGroupBy: kpiConfig.groupBy,
+        uiTimeBucket: kpiConfig.groupBy === 'time_bucket' ? timeBucket : 'N/A',
+        backendGroupBy: transformedGroupBy,
+        filters: {
+          classes: kpiConfig.filters.classes,
+          timeRange: {
+            from: fromDate.toISOString(),
+            to: toDate.toISOString()
+          }
+        }
+      });
+
       // Map KPI config to API request format
       const apiRequest = {
         metric: kpiConfig.metric,
@@ -142,12 +175,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
           vest: kpiConfig.filters.vest === 'all' ? undefined : kpiConfig.filters.vest,
           speedMin: kpiConfig.filters.speedMin,
         },
-        groupBy: (kpiConfig.groupBy === 'time_bucket' ? 
-                 (timeBucket === '1day' ? 'day' : 
-                  timeBucket === '1hour' ? 'hour' :
-                  timeBucket === '5min' ? '5min' :
-                  timeBucket === '1min' ? '1min' : '5min') : 
-                 kpiConfig.groupBy === 'class' ? 'class' : '5min') as 'hour' | 'day' | 'class' | '5min' | '1min',
+        groupBy: transformedGroupBy
       };
       
       let results: ApiResponse;
@@ -201,6 +229,12 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       })) || [];
       
       setAggregatedData(transformedData);
+      console.log('[KPIBuilder] Data set:', {
+        metric: kpiConfig.metric,
+        count: transformedData.length,
+        groupBy: kpiConfig.groupBy,
+        firstItem: transformedData[0]
+      });
       setHasApplied(true);
     } catch (error) {
       console.error('Query failed:', error);
@@ -208,20 +242,33 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     } finally {
       setIsQuerying(false);
     }
-  };
+  }, [selectedClasses, kpiConfig, setAggregatedData, setHasApplied, setQueryError, setIsQuerying]);
 
   // Load initial config data when initialConfig changes
   useEffect(() => {
-    if (initialConfig) {
-      // Reset state to ensure fresh data
+    if (initialConfig && !hasApplied) {
+      // IMMEDIATELY clear old data to prevent stale display
       setAggregatedData([]);
-      setHasApplied(false);
-      // Apply filters after a brief delay to ensure state updates complete
+      
+      // Mark as applied to prevent duplicate calls
+      setHasApplied(true);
+      
+      // Ensure time range is properly converted to Date objects
+      const fromDate = initialConfig.filters.timeRange.from instanceof Date 
+        ? initialConfig.filters.timeRange.from 
+        : new Date(initialConfig.filters.timeRange.from);
+      const toDate = initialConfig.filters.timeRange.to instanceof Date 
+        ? initialConfig.filters.timeRange.to 
+        : new Date(initialConfig.filters.timeRange.to);
+      
+      setCustomTimeRange({ from: fromDate, to: toDate });
+      
+      // Trigger the apply action after state updates
       setTimeout(() => {
         handleApplyFilters();
-      }, 100);
+      }, 150);
     }
-  }, [initialConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialConfig, hasApplied, handleApplyFilters]);
 
   const allClasses = ['human', 'vehicle'];
 
@@ -306,7 +353,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="data-period">Full Data Period (18 min)</SelectItem>
+                    <SelectItem value="data-period">Full Data Period (18 min: 15:42-16:00)</SelectItem>
                     <SelectItem value="data-hour">Data Hour (15:00-16:00)</SelectItem>
                     <SelectItem value="data-day">Full Day (April 2, 2025)</SelectItem>
                     <SelectItem value="custom">Custom Range</SelectItem>
@@ -442,7 +489,10 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
           {/* Grouping */}
           <Card className="border-none shadow-md">
             <CardHeader>
-              <CardTitle className="text-base">3. Group By</CardTitle>
+              <CardTitle className="text-base">3. Group Results By</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Determines how filtered data is bucketed for visualization
+              </p>
             </CardHeader>
             <CardContent className="space-y-3">
               <Select value={groupBy} onValueChange={(v) => setGroupBy(v as GroupByType)}>
@@ -457,6 +507,33 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
                   <SelectItem value="none">None (Total)</SelectItem>
                 </SelectContent>
               </Select>
+              
+              {/* Add explanation based on selection */}
+              {groupBy === 'time_bucket' && (
+                <p className="text-xs text-muted-foreground">
+                  📊 Groups data by time intervals. Useful for trend analysis.
+                </p>
+              )}
+              {groupBy === 'class' && (
+                <p className="text-xs text-muted-foreground">
+                  📊 Groups data by asset type (human, vehicle, etc.).
+                </p>
+              )}
+              {groupBy === 'area' && (
+                <p className="text-xs text-muted-foreground">
+                  📊 Groups data by physical area/zone.
+                </p>
+              )}
+              {groupBy === 'asset_id' && (
+                <p className="text-xs text-muted-foreground">
+                  📊 Groups data by individual assets (shows top 10).
+                </p>
+              )}
+              {groupBy === 'none' && (
+                <p className="text-xs text-muted-foreground">
+                  📊 Shows total aggregated value without grouping.
+                </p>
+              )}
 
               {groupBy === 'time_bucket' && (
                 <Select value={timeBucket} onValueChange={(v) => setTimeBucket(v as '1min' | '5min' | '1hour' | '1day')}>
