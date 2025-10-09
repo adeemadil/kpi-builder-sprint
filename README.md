@@ -1,20 +1,32 @@
 # Safety Analytics - KPI Builder
 
-Dynamic KPI analytics dashboard for industrial safety monitoring.
+Dynamic KPI analytics dashboard for industrial safety monitoring with real-time safety metrics, close-call detection, and customizable analytics.
 
-## 🚀 Quick Start (Docker)
+## 🚀 Quick Start
 
+### Option 1: Docker (Recommended)
 **One command to run everything:**
 
 ```bash
-docker-compose up --build
+./start.sh
 ```
 
-The system will:
-1. Start PostgreSQL database
-2. Start backend API server
-3. Automatically seed database with 100k records (first run only)
-4. Expose API at http://localhost:3001
+This will:
+1. Build and start the backend with Docker
+2. Automatically seed database with 100k records (first run only)
+3. Expose API at http://localhost:3001
+4. Start frontend with: `./scripts/start-frontend.sh`
+
+### Option 2: Local Development
+**Backend:**
+```bash
+./scripts/start-backend.sh
+```
+
+**Frontend:**
+```bash
+./scripts/start-frontend.sh
+```
 
 **Check health:**
 ```bash
@@ -28,21 +40,26 @@ kpi-builder-sprint/
 ├── backend/                    # Express API server
 │   ├── src/
 │   │   ├── server.ts          # Main server
-│   │   ├── db.ts              # Database connection & seeding
+│   │   ├── db.ts              # Database connection & queries
 │   │   └── routes.ts          # API endpoints
 │   ├── data/
-│   │   ├── schema.sql         # PostgreSQL schema
-│   │   ├── seed_sqlite.py     # Seed script (repurposed for Postgres)
+│   │   ├── seed_sqlite.py     # Python seeding script
 │   │   └── work-package-raw-data.csv  # 100k detection records
 │   ├── Dockerfile
 │   └── package.json
-├── frontend/                  # Lovable frontend (React)
+├── frontend/                  # React frontend
 │   ├── src/
 │   │   ├── components/        # UI components
 │   │   └── lib/
 │   │       └── api.ts         # Backend API client
 │   └── package.json
-├── docker-compose.yml          # Orchestration
+├── scripts/                   # Startup scripts
+│   ├── start-backend.sh       # Backend startup script
+│   └── start-frontend.sh      # Frontend startup script
+├── docker-compose.yml          # Docker orchestration
+├── Dockerfile                 # Docker build configuration
+├── start.sh                   # Docker startup script
+├── package.json              # Root package.json with workspaces
 └── README.md
 ```
 
@@ -77,116 +94,82 @@ GET /api/vest-violations?from=2025-01-01&to=2025-01-07
 GET /api/overspeed?from=2025-01-01&to=2025-01-07&threshold=1.5
 ```
 
-## 🧪 Testing the API
+## 🧪 Testing
 
-### Quick Health Check
+### Jest Unit Tests
 ```bash
+# Run all tests
+cd backend && npm test
+
+# Run tests with coverage
+cd backend && npm run test:coverage
+
+# Run tests in watch mode
+cd backend && npm run test:watch
+
+# Run tests for CI
+cd backend && npm run test:ci
+```
+
+### Manual API Testing
+```bash
+# Health check
 curl -s http://localhost:3001/api/health | jq .
-```
-Expected response:
-```json
-{
-  "status": "healthy",
-  "recordCount": 37000,
-  "timestamp": "2025-10-07T..."
-}
-```
 
-### Test Detections Endpoint
-```bash
-# Get 5 human detections
+# Get sample data
 curl -s -X POST http://localhost:3001/api/detections \
   -H 'Content-Type: application/json' \
-  -d '{"filters":{"classes":["human"]},"limit":5,"offset":0}' | jq .
-```
-Expected response:
-```json
-{
-  "data": [
-    {
-      "id": "H001",
-      "class": "human",
-      "t": "2025-01-01T08:00:00Z",
-      "x": 10.5,
-      "y": 20.3,
-      "speed": 1.2,
-      "heading": 45,
-      "vest": 1
-    }
-    // ... more items ...
-  ],
-  "count": 5
-}
-```
+  -d '{"limit":5}' | jq .
 
-### Test Aggregate Endpoint
-```bash
-# Count detections by hour
+# Test aggregation
 curl -s -X POST http://localhost:3001/api/aggregate \
   -H 'Content-Type: application/json' \
-  -d '{"metric":"count","filters":{},"groupBy":"hour"}' | jq .
-```
-Expected response:
-```json
-{
-  "series": [
-    {"time": "2025-01-01 08:00:00", "value": 145},
-    {"time": "2025-01-01 09:00:00", "value": 178}
-    // ...
-  ],
-  "meta": {
-    "metric": "count",
-    "groupBy": "hour",
-    "totalRecords": 37000,
-    "filteredRecords": 37000,
-    "executionTime": 45
-  }
-}
+  -d '{"metric":"count","groupBy":"hour"}' | jq .
 ```
 
-### Test Close Calls
-```bash
-curl -s -X POST http://localhost:3001/api/close-calls \
-  -H 'Content-Type: application/json' \
-  -d '{"filters":{"timeRange":{"from":"2025-01-01","to":"2025-01-07"}},"distance":2.0}' | jq .
-```
-
-### Test Vest Violations
-```bash
-curl -s "http://localhost:3001/api/vest-violations?from=2025-01-01&to=2025-01-07" | jq .
-```
-
-### Test Overspeed Events
-```bash
-curl -s "http://localhost:3001/api/overspeed?from=2025-01-01&to=2025-01-07&threshold=1.5" | jq .
-```
-
-### All Tests at Once
-```bash
-# Run this script to test all endpoints
-./test-api.sh
-```
+### Expected Results
+- **Health Check**: `{"status": "healthy", "recordCount": 100000}`
+- **Detections**: Array of detection objects with coordinates, timestamps, etc.
+- **Aggregations**: Time-series data for charts and KPIs
 
 ## 🛠️ Development
 
-**Backend only:**
+### Local Development
+**Install all dependencies:**
 ```bash
-cd backend
-npm install
+npm run install:all
+```
+
+**Start backend:**
+```bash
+./scripts/start-backend.sh
+# or
+npm run dev:backend
+```
+
+**Start frontend:**
+```bash
+./scripts/start-frontend.sh
+# or
+npm run dev:frontend
+```
+
+**Start both (development):**
+```bash
 npm run dev
 ```
 
-**Frontend only:**
+### Docker Development
+**Start with Docker:**
 ```bash
-cd frontend
-npm install
-npm run dev
+./start.sh
+# or
+npm run docker:up
 ```
 
 **View logs:**
 ```bash
-docker-compose logs -f backend
-docker-compose logs -f postgres
+npm run docker:logs
 ```
 
 **Restart services:**
@@ -196,50 +179,74 @@ docker-compose restart backend
 
 **Stop everything:**
 ```bash
-docker-compose down
+npm run docker:down
 ```
 
 **Reset database:**
 ```bash
 docker-compose down -v  # Removes volume
-docker-compose up --build
+npm run docker:up  # Rebuilds and reseeds
 ```
 
 ## ✅ Features
 
-- ✅ 100k+ detection records auto-seeded on first run
-- ✅ PostgreSQL database with proper indexing
-- ✅ RESTful API with flexible filtering
-- ✅ Close-call detection (< 2m proximity)
-- ✅ Vest violation tracking
-- ✅ Overspeed monitoring
-- ✅ Aggregation by hour/day/class
+- ✅ 100k+ detection records auto-seeded with Python
+- ✅ SQLite database with optimized indexing
+- ✅ RESTful API with flexible filtering and aggregation
+- ✅ Close-call detection (< 2m proximity algorithm)
+- ✅ Vest violation tracking for safety compliance
+- ✅ Overspeed monitoring with configurable thresholds
+- ✅ Dynamic KPI builder with custom metrics
+- ✅ Interactive charts (line, bar, area)
+- ✅ Real-time filtering by class, area, time range
 - ✅ Dockerized for easy deployment
+- ✅ Comprehensive test suites
+- ✅ Separate startup scripts for development
 
 ## 🐛 Troubleshooting
 
-**"Database connection failed"**
+**"Database not seeded"**
 ```bash
-# Check if PostgreSQL is running
-docker-compose ps
+# Check if database file exists
+ls -la backend/data/kpi_builder.sqlite
 
-# View PostgreSQL logs
-docker-compose logs postgres
+# Re-run seeding script
+cd backend/data && python3 seed_sqlite.py
 ```
 
-**"Port already in use"**
+**"Backend won't start"**
 ```bash
-# Stop all services
-docker-compose down
-
-# Check what's using the port
+# Check if port is in use
 lsof -i:3001
-lsof -i:5432
+
+# Kill existing process
+pkill -f "node.*server"
+
+# Restart backend
+./scripts/start-backend.sh
 ```
 
 **"Frontend can't reach API"**
-- Check VITE_API_URL in frontend/.env
-- Verify backend is running: curl http://localhost:3001/api/health
+```bash
+# Check if backend is running
+curl http://localhost:3001/api/health
+
+# Check frontend environment
+cat frontend/.env
+```
+
+**"Docker issues"**
+```bash
+# Check Docker status
+docker-compose ps
+
+# View logs
+docker-compose logs backend
+
+# Reset everything
+docker-compose down -v
+./start.sh
+```
 
 ## 📝 License
 
@@ -247,24 +254,27 @@ MIT
 
 ## 🤖 Automated Testing
 
-Run the automated test suite:
+### Jest Test Suite
+The project includes comprehensive Jest tests covering:
 
+**API Endpoints:**
+- ✅ Health check endpoint
+- ✅ Detections endpoint with filtering
+- ✅ Aggregate endpoint with multiple metrics
+- ✅ Close-calls detection algorithm
+- ✅ Vest violations tracking
+- ✅ Overspeed event detection
+
+**Test Coverage:**
+- ✅ Database connection and seeding
+- ✅ All API endpoints with various filters
+- ✅ Aggregation logic (count, unique_ids, avg_speed)
+- ✅ Error handling and edge cases
+- ✅ Performance and response validation
+- ✅ Data validation and type checking
+
+**Run Tests:**
 ```bash
-cd backend
-npm test
+cd backend && npm test
+cd backend && npm run test:coverage
 ```
-
-Run tests with coverage:
-
-```bash
-npm run test:coverage
-```
-
-Tests cover:
-- ✅ Database connection
-- ✅ All API endpoints
-- ✅ Filter combinations
-- ✅ Aggregation logic
-- ✅ Close-call detection
-- ✅ Error handling
-- ✅ Edge cases

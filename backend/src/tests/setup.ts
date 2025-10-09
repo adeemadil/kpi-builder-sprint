@@ -1,6 +1,6 @@
-// Test database connection string (use a separate test database)
-process.env.DATABASE_URL = process.env.TEST_DATABASE_URL || 
-  'postgresql://kpi_user:kpi_password@localhost:5432/kpi_builder_test';
+// Test database setup - use a separate test SQLite database
+process.env.SQLITE_PATH = process.env.TEST_SQLITE_PATH || 
+  './test_kpi_builder.sqlite';
 
 let db: typeof import('../db');
 
@@ -8,6 +8,28 @@ let db: typeof import('../db');
 beforeAll(async () => {
   try {
     db = await import('../db');
+    
+    // Create test database schema
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS detections (
+        id TEXT NOT NULL,
+        class TEXT NOT NULL,
+        t TIMESTAMP NOT NULL,
+        x REAL NOT NULL,
+        y REAL NOT NULL,
+        heading REAL,
+        vest INTEGER,
+        speed REAL,
+        area TEXT,
+        PRIMARY KEY (id, t)
+      );
+    `);
+    
+    // Create indexes
+    await db.query('CREATE INDEX IF NOT EXISTS idx_detections_t ON detections(t)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_detections_class ON detections(class)');
+    await db.query('CREATE INDEX IF NOT EXISTS idx_detections_area ON detections(area)');
+    
     // Connect to test database
     await db.query('SELECT 1');
     // eslint-disable-next-line no-console
@@ -26,9 +48,9 @@ afterAll(async () => {
   console.log('✅ Test database connection closed');
 });
 
-// Helper to truncate tables between tests (optional)
+// Helper to clean database between tests
 export async function cleanDatabase() {
-  await db.query('TRUNCATE detections CASCADE');
+  await db.query('DELETE FROM detections');
 }
 
 // Helper to insert test data

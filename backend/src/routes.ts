@@ -44,10 +44,13 @@ function buildDetectionsWhere(filters: any | undefined) {
     where.push(`area IN (${placeholders.join(',')})`);
   }
 
-  // vest: 0 | 1
-  if (filters.vest === 0 || filters.vest === 1) {
-    params.push(filters.vest);
-    where.push(`vest = $${params.length}`);
+  // vest: 0 | 1 (handle both string and number)
+  if (filters.vest !== undefined && filters.vest !== 'all') {
+    const vestValue = Number(filters.vest);
+    if (vestValue === 0 || vestValue === 1) {
+      params.push(vestValue);
+      where.push(`vest = $${params.length}`);
+    }
   }
 
   // speed range
@@ -161,7 +164,16 @@ router.post('/aggregate', async (req: Request, res: Response) => {
       groupBy,
       whereSql,
       params,
-      fullQuery: sql.replace(/\s+/g, ' ').trim()
+      fullQuery: sql.replace(/\s+/g, ' ').trim(),
+      // ADD: Detailed filter breakdown
+      receivedFilters: {
+        vest: filters?.vest,
+        vestType: typeof filters?.vest,
+        areas: filters?.areas,
+        areasLength: filters?.areas?.length,
+        classes: filters?.classes,
+        timeRange: filters?.timeRange
+      }
     });
 
     const rows = await db.query(sql, params);

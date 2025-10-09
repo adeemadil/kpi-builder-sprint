@@ -163,6 +163,13 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
         }
       });
 
+      console.log('[KPIBuilder] Filter values being sent:', {
+        vest: kpiConfig.filters.vest,
+        vestConverted: kpiConfig.filters.vest === 'all' ? undefined : Number(kpiConfig.filters.vest),
+        areas: selectedAreas,
+        classes: kpiConfig.filters.classes
+      });
+
       // Map KPI config to API request format
       const apiRequest = {
         metric: kpiConfig.metric,
@@ -172,7 +179,8 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
             to: toDate.toISOString(),
           },
           classes: kpiConfig.filters.classes,
-          vest: kpiConfig.filters.vest === 'all' ? undefined : kpiConfig.filters.vest,
+          areas: selectedAreas.length > 0 ? selectedAreas : undefined,
+          vest: kpiConfig.filters.vest === 'all' ? undefined : Number(kpiConfig.filters.vest),
           speedMin: kpiConfig.filters.speedMin,
         },
         groupBy: transformedGroupBy

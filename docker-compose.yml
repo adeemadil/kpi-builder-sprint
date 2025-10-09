@@ -1,12 +1,20 @@
+version: '3.8'
+
 services:
   backend:
-    build: ./backend
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: kpi-builder-backend
     environment:
       SQLITE_PATH: /app/data/kpi_builder.sqlite
       PORT: 3001
       NODE_ENV: production
     volumes:
-      - ./backend/data:/app/data
+      # Persist database data
+      - backend_data:/app/data
+      # Mount CSV for seeding (optional, for development)
+      - ./backend/data/work-package-raw-data.csv:/app/data/work-package-raw-data.csv:ro
     ports:
       - "3001:3001"
     restart: unless-stopped
@@ -15,5 +23,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 30s
+    networks:
+      - kpi-builder-network
+
+volumes:
+  backend_data:
+    driver: local
+
+networks:
+  kpi-builder-network:
+    driver: bridge
 
 

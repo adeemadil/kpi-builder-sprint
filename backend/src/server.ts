@@ -39,16 +39,16 @@ async function start(): Promise<void> {
     // eslint-disable-next-line no-console
     console.log('🔌 Connecting to database...');
 
+    // Check if database is properly seeded
     const isSeeded = await db.isDatabaseSeeded();
     if (!isSeeded) {
       // eslint-disable-next-line no-console
-      console.log('📊 Database empty, seeding data...');
-      const inserted = await db.seedDatabase();
-      // eslint-disable-next-line no-console
-      console.log(`✅ Database seeded successfully with ${inserted} rows.`);
+      console.error('❌ Database is not seeded. Please run the seeding script first.');
+      console.log('💡 Run: python3 backend/data/seed_sqlite.py');
+      process.exit(1);
     } else {
       // eslint-disable-next-line no-console
-      console.log('✅ Database already seeded');
+      console.log('✅ Database connection verified');
     }
 
     app.listen(PORT, () => {

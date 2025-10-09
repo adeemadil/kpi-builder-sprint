@@ -1,5 +1,5 @@
 
--- Suggested table for detections
+-- table for detections
 CREATE TABLE IF NOT EXISTS detections (
   id TEXT NOT NULL,
   class TEXT NOT NULL,
