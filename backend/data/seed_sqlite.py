@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 # Configuration
-CSV_PATH = Path('work-package-raw-data.csv')
+CSV_PATH = Path('work-package-raw-data.csv')  # CSV is in the same directory as this script
 DB_PATH = Path('kpi_builder.sqlite')
 
 def log_info(message: str) -> None:
@@ -167,15 +167,25 @@ def main() -> int:
             create_schema(con)
             create_indexes(con)
             
-            # Insert data
+            # Insert data in batches to avoid "too many SQL variables" error
             log_info("Inserting data into database...")
-            df[['id', 'class', 't', 'x', 'y', 'heading', 'vest', 'speed', 'area']].to_sql(
-                'detections', 
-                con, 
-                if_exists='replace', 
-                index=False,
-                method='multi'
-            )
+            batch_size = 1000
+            total_rows = len(df)
+            
+            for i in range(0, total_rows, batch_size):
+                batch_df = df.iloc[i:i+batch_size]
+                batch_df[['id', 'class', 't', 'x', 'y', 'heading', 'vest', 'speed', 'area']].to_sql(
+                    'detections', 
+                    con, 
+                    if_exists='append' if i > 0 else 'replace',
+                    index=False,
+                    method='multi'
+                )
+                
+                if (i + batch_size) % 10000 == 0:
+                    log_info(f"Inserted {min(i + batch_size, total_rows)}/{total_rows} rows...")
+            
+            log_info("Data insertion completed")
             
             # Verify insertion
             cursor = con.cursor()
