@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 CSV_PATH = Path('work-package-raw-data.csv')  # adjust if needed
-DB_PATH = Path('detections.sqlite')
+DB_PATH = Path('kpi_builder.sqlite')
 
 def infer_timestamp_col(df):
     for cand in ['t', 'timestamp', 'time']:
@@ -25,7 +25,7 @@ def main():
     # Standardize column names
     rename_map = {}
     for c in df.columns:
-        if c.lower() in ['class_name','label','type']:  # Add 'type' here
+        if c.lower() in ['class_name','label','type']:
             rename_map[c] = 'class'
     df = df.rename(columns=rename_map)
     # Ensure required columns exist
@@ -39,11 +39,12 @@ def main():
             df[col] = pd.to_numeric(df[col], errors='coerce')
     # Save to SQLite
     con = sqlite3.connect(DB_PATH)
-    df[['id','class','t','x','y','heading','vest','speed']].to_sql('detections', con, if_exists='replace', index=False)
+    df[['id','class','t','x','y','heading','vest','speed','area']].to_sql('detections', con, if_exists='replace', index=False)
     # Add indices
     cur = con.cursor()
     cur.execute('CREATE INDEX IF NOT EXISTS idx_detections_t ON detections(t)')
     cur.execute('CREATE INDEX IF NOT EXISTS idx_detections_class ON detections(class)')
+    cur.execute('CREATE INDEX IF NOT EXISTS idx_detections_area ON detections(area)')
     con.commit()
     con.close()
     print(f'Loaded {len(df)} rows into {DB_PATH}')

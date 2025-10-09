@@ -18,11 +18,11 @@ function buildDetectionsWhere(filters: any | undefined) {
 
   // timeRange: { from, to }
   if (filters.timeRange?.from) {
-    params.push(new Date(filters.timeRange.from));
+    params.push(new Date(filters.timeRange.from).toISOString().replace('T', ' ').replace('Z', ''));
     where.push(`t >= $${params.length}`);
   }
   if (filters.timeRange?.to) {
-    params.push(new Date(filters.timeRange.to));
+    params.push(new Date(filters.timeRange.to).toISOString().replace('T', ' ').replace('Z', ''));
     where.push(`t <= $${params.length}`);
   }
 
@@ -67,7 +67,7 @@ function buildDetectionsWhere(filters: any | undefined) {
 // GET /health
 router.get('/health', async (_req: Request, res: Response) => {
   try {
-    const row = await db.queryOne('SELECT COUNT(*)::int as count FROM detections');
+    const row = await db.queryOne('SELECT COUNT(*) as count FROM detections');
     res.json({
       status: 'healthy',
       recordCount: (row?.count as number) || 0,
@@ -94,7 +94,7 @@ router.post('/detections', async (req: Request, res: Response) => {
     `;
     const dataParams = [...params, Number(limit), Number(offset)];
 
-    const countSql = `SELECT COUNT(*)::int AS count FROM detections ${whereSql}`;
+    const countSql = `SELECT COUNT(*) AS count FROM detections ${whereSql}`;
     const [data, countRow] = await Promise.all([
       db.query(dataSql, dataParams),
       db.queryOne(countSql, params),
@@ -127,16 +127,16 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     let groupExpr = '';
     let selectTimeOrLabel = '';
     if (groupBy === 'hour') {
-      groupExpr = `date_trunc('hour', t)`;
+      groupExpr = `strftime('%Y-%m-%dT%H:00:00Z', t)`;
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else if (groupBy === 'day') {
-      groupExpr = `date_trunc('day', t)`;
+      groupExpr = `strftime('%Y-%m-%dT00:00:00Z', t)`;
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else if (groupBy === '5min') {
-      groupExpr = `date_trunc('minute', t) + INTERVAL '5 minutes' * FLOOR(EXTRACT(minute FROM t) / 5)`;
+      groupExpr = `strftime('%Y-%m-%dT%H:%M:00Z', t)`;
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else if (groupBy === '1min') {
-      groupExpr = `date_trunc('minute', t)`;
+      groupExpr = `strftime('%Y-%m-%dT%H:%M:00Z', t)`;
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else {
       groupExpr = `class`;
@@ -144,9 +144,9 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     }
 
     let valueExpr = '';
-    if (metric === 'count') valueExpr = 'COUNT(*)::float AS value';
-    if (metric === 'unique_ids') valueExpr = 'COUNT(DISTINCT id)::float AS value';
-    if (metric === 'avg_speed') valueExpr = 'AVG(speed)::float AS value';
+    if (metric === 'count') valueExpr = 'CAST(COUNT(*) AS REAL) AS value';
+    if (metric === 'unique_ids') valueExpr = 'CAST(COUNT(DISTINCT id) AS REAL) AS value';
+    if (metric === 'avg_speed') valueExpr = 'AVG(speed) AS value';
 
     const sql = `
       SELECT ${selectTimeOrLabel}, ${valueExpr}
@@ -158,8 +158,8 @@ router.post('/aggregate', async (req: Request, res: Response) => {
 
     const rows = await db.query(sql, params);
 
-    const totalRow = await db.queryOne(`SELECT COUNT(*)::int AS count FROM detections`);
-    const filteredRow = await db.queryOne(`SELECT COUNT(*)::int AS count FROM detections ${whereSql}`, params);
+    const totalRow = await db.queryOne(`SELECT COUNT(*) AS count FROM detections`);
+    const filteredRow = await db.queryOne(`SELECT COUNT(*) AS count FROM detections ${whereSql}`, params);
     const executionTime = Date.now() - startMs;
 
     res.json({
@@ -189,19 +189,19 @@ router.post('/close-calls', async (req: Request, res: Response) => {
     const vehicleWhereParts: string[] = [];
 
     if (filters?.timeRange?.from) {
-      timeParams.push(new Date(filters.timeRange.from));
+      timeParams.push(new Date(filters.timeRange.from).toISOString());
       humanWhereParts.push(`h.t >= $${timeParams.length}`);
       vehicleWhereParts.push(`v.t >= $${timeParams.length}`);
     }
     if (filters?.timeRange?.to) {
-      timeParams.push(new Date(filters.timeRange.to));
+      timeParams.push(new Date(filters.timeRange.to).toISOString());
       humanWhereParts.push(`h.t <= $${timeParams.length}`);
       vehicleWhereParts.push(`v.t <= $${timeParams.length}`);
     }
 
-    // Humans vs vehicles heuristic
-    humanWhereParts.push(`(h.class ILIKE 'human' OR h.class ILIKE 'person' OR h.vest IS NOT NULL)`);
-    vehicleWhereParts.push(`NOT (v.class ILIKE 'human' OR v.class ILIKE 'person' OR v.vest IS NOT NULL)`);
+    // Humans vs vehicles - use class field directly for accuracy
+    humanWhereParts.push(`LOWER(h.class) = 'human'`);
+    vehicleWhereParts.push(`LOWER(v.class) != 'human'`);
 
     const humansWhereSql = humanWhereParts.length ? `WHERE ${humanWhereParts.join(' AND ')}` : '';
     const vehiclesWhereSql = vehicleWhereParts.length ? `WHERE ${vehicleWhereParts.join(' AND ')}` : '';
@@ -215,13 +215,13 @@ router.post('/close-calls', async (req: Request, res: Response) => {
         SELECT id, class, t, x, y, vest FROM detections v
         ${vehiclesWhereSql}
       )
-      SELECT date_trunc('hour', h.t) AS time, COUNT(*)::int AS value
+      SELECT strftime('%Y-%m-%dT%H:00:00Z', h.t) AS time, COUNT(*) AS value
       FROM humans h
       JOIN vehicles v
-        ON date_trunc('second', h.t) = date_trunc('second', v.t)
-       AND sqrt(power(h.x - v.x, 2) + power(h.y - v.y, 2)) < $${timeParams.length + 1}
-      GROUP BY date_trunc('hour', h.t)
-      ORDER BY date_trunc('hour', h.t)
+        ON strftime('%Y-%m-%dT%H:%M:%S', h.t) = strftime('%Y-%m-%dT%H:%M:%S', v.t)
+       AND sqrt((h.x - v.x)*(h.x - v.x) + (h.y - v.y)*(h.y - v.y)) < $${timeParams.length + 1}
+      GROUP BY strftime('%Y-%m-%dT%H:00:00Z', h.t)
+      ORDER BY strftime('%Y-%m-%dT%H:00:00Z', h.t)
     `;
 
     const rows = await db.query(sql, [...timeParams, threshold]);
@@ -235,23 +235,23 @@ router.post('/close-calls', async (req: Request, res: Response) => {
 router.get('/vest-violations', async (req: Request, res: Response) => {
   try {
     const { from, to } = req.query as Record<string, string | undefined>;
-    const where: string[] = ['vest = 0'];
+    const where: string[] = ['vest = 0', "class = 'human'"];
     const params: any[] = [];
     if (from) {
-      params.push(new Date(from));
+      params.push(new Date(from).toISOString().replace('T', ' ').replace('Z', ''));
       where.push(`t >= $${params.length}`);
     }
     if (to) {
-      params.push(new Date(to));
+      params.push(new Date(to).toISOString().replace('T', ' ').replace('Z', ''));
       where.push(`t <= $${params.length}`);
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const sql = `
-      SELECT date_trunc('day', t) AS time, COUNT(*)::int AS value
+      SELECT strftime('%Y-%m-%dT00:00:00Z', t) AS time, COUNT(*) AS value
       FROM detections
       ${whereSql}
-      GROUP BY date_trunc('day', t)
-      ORDER BY date_trunc('day', t)
+      GROUP BY strftime('%Y-%m-%dT00:00:00Z', t)
+      ORDER BY strftime('%Y-%m-%dT00:00:00Z', t)
     `;
     const rows = await db.query(sql, params);
     res.json({ series: rows });
@@ -268,16 +268,16 @@ router.get('/overspeed', async (req: Request, res: Response) => {
     const where: string[] = ['speed > $1'];
     const params: any[] = [th];
     if (from) {
-      params.push(new Date(from));
+      params.push(new Date(from).toISOString().replace('T', ' ').replace('Z', ''));
       where.push(`t >= $${params.length}`);
     }
     if (to) {
-      params.push(new Date(to));
+      params.push(new Date(to).toISOString().replace('T', ' ').replace('Z', ''));
       where.push(`t <= $${params.length}`);
     }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const sql = `
-      SELECT class AS label, COUNT(*)::int AS value
+      SELECT class AS label, COUNT(*) AS value
       FROM detections
       ${whereSql}
       GROUP BY class

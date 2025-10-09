@@ -1,6 +1,38 @@
 
 # Dynamic Chart Builder — Take‑Home Assignment
 
+## Quickstart
+
+### Run with Docker (recommended)
+- Ensure Docker Desktop is running.
+- From the repo root:
+  - `./start.sh` (or run `docker compose up -d`)
+- Backend API will be on `http://localhost:3001` with health at `/api/health`.
+- The compose starts Postgres and the backend. The backend uses `DATABASE_URL` from compose; no local DB setup needed.
+
+### Run locally without Docker
+1) Postgres
+- Install Postgres and ensure it listens on `localhost:5432`.
+- Create DB and user (or adjust to your own and set `DATABASE_URL`):
+  - DB: `kpi_builder`
+  - User: `kpi_user` / Password: `kpi_password`
+
+2) Backend
+- Copy env example: `cp backend/.env.example backend/.env` (or set `DATABASE_URL`).
+- Install deps and run:
+  - `cd backend`
+  - Dev (TS watch): `npm run dev`
+  - Or build + start: `npm run build && npm start`
+- Health: `http://localhost:3001/api/health`
+
+3) Frontend
+- `cd frontend && npm install`
+- Dev server: `npm run dev` (requires vite; included in deps)
+
+Notes
+- On first backend start, if the database is empty, it auto-seeds from `backend/data/work-package-raw-data.csv` using `backend/data/schema.sql`.
+- If you prefer a single connection string, set `DATABASE_URL=postgresql://<user>:<pass>@<host>:5432/<db>` in `backend/.env`.
+
 ## Problem
 You are given a raw CSV of position and event detections from an industrial environment (humans, vehicles, pallet trucks, AGVs, etc.).
 Your task is to build a **dynamic chart/analytics builder** that lets an end user define flexible KPIs and visualize them interactively.

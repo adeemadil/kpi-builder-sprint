@@ -9,8 +9,10 @@ CREATE TABLE IF NOT EXISTS detections (
   heading REAL,
   vest INTEGER,
   speed REAL,
+  area TEXT,
   PRIMARY KEY (id, t)
 );
 
 CREATE INDEX IF NOT EXISTS idx_detections_t ON detections(t);
 CREATE INDEX IF NOT EXISTS idx_detections_class ON detections(class);
+CREATE INDEX IF NOT EXISTS idx_detections_area ON detections(area);

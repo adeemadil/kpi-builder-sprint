@@ -231,11 +231,18 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   }, []);
 
   const toggleClass = (className: string) => {
-    setSelectedClasses(prev =>
-      prev.includes(className)
+    setSelectedClasses(prev => {
+      const newClasses = prev.includes(className)
         ? prev.filter(c => c !== className)
-        : [...prev, className]
-    );
+        : [...prev, className];
+      
+      // Prevent unchecking the last class
+      if (newClasses.length === 0) {
+        return prev; // Keep the previous selection
+      }
+      
+      return newClasses;
+    });
   };
 
   const toggleArea = (area: string) => {
@@ -317,12 +324,20 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
                         id={className}
                         checked={selectedClasses.includes(className)}
                         onCheckedChange={() => toggleClass(className)}
+                        disabled={selectedClasses.length === 1 && selectedClasses.includes(className)}
                       />
                       <label
                         htmlFor={className}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 capitalize cursor-pointer"
+                        className={`text-sm font-medium leading-none capitalize cursor-pointer ${
+                          selectedClasses.length === 1 && selectedClasses.includes(className)
+                            ? 'text-muted-foreground'
+                            : ''
+                        }`}
                       >
                         {className.replace('_', ' ')}
+                        {selectedClasses.length === 1 && selectedClasses.includes(className) && (
+                          <span className="text-xs text-muted-foreground ml-1">(required)</span>
+                        )}
                       </label>
                     </div>
                   ))}

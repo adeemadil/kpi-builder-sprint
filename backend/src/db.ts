@@ -1,18 +1,22 @@
-import { Pool, PoolClient, QueryResult } from 'pg';
+import sqlite3 from 'sqlite3';
+import { open, Database as SqliteDb } from 'sqlite';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
 
-// Initialize a connection pool
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: Number(process.env.DB_PORT) || 5432,
-  database: process.env.DB_NAME || 'kpi_builder',
-  user: process.env.DB_USER || 'kpi_user',
-  password: process.env.DB_PASSWORD || 'kpi_password',
-  max: 10,
-  idleTimeoutMillis: 30000,
-});
+// Initialize SQLite database (file-based)
+const DB_PATH = process.env.SQLITE_PATH || path.resolve(__dirname, '..', 'data', 'kpi_builder.sqlite');
+let dbPromise: Promise<SqliteDb> | null = null;
+
+async function getDb(): Promise<SqliteDb> {
+  if (!dbPromise) {
+    dbPromise = open({ filename: DB_PATH, driver: sqlite3.Database }).then(async (db) => {
+      await db.exec("PRAGMA journal_mode = WAL;");
+      return db;
+    });
+  }
+  return dbPromise;
+}
 
 function logInfo(message: string): void {
   // Centralized logging for DB operations
@@ -26,17 +30,14 @@ function logError(message: string, error?: unknown): void {
 }
 
 export async function query(sql: string, params: any[] = []): Promise<any[]> {
-  let client: PoolClient | undefined;
   try {
-    client = await pool.connect();
-    logInfo(`query: ${sql.replace(/\s+/g, ' ').trim()} | params: ${JSON.stringify(params)}`);
-    const result: QueryResult = await client.query(sql, params);
-    return result.rows;
+    const normalizedSql = sql.replace(/\$\d+/g, '?');
+    logInfo(`query: ${normalizedSql.replace(/\s+/g, ' ').trim()} | params: ${JSON.stringify(params)}`);
+    const db = await getDb();
+    return db.all(normalizedSql, params);
   } catch (err) {
     logError('query failed', err);
     throw err;
-  } finally {
-    if (client) client.release();
   }
 }
 
@@ -47,10 +48,11 @@ export async function queryOne(sql: string, params: any[] = []): Promise<any | n
 
 export async function close(): Promise<void> {
   try {
-    await pool.end();
-    logInfo('pool closed');
+    const db = await getDb();
+    await db.close();
+    logInfo('db closed');
   } catch (err) {
-    logError('error closing pool', err);
+    logError('error closing db', err);
     throw err;
   }
 }
@@ -58,8 +60,9 @@ export async function close(): Promise<void> {
 export async function isDatabaseSeeded(): Promise<boolean> {
   try {
     // Check table existence
+    // Check table existence in SQLite
     const existsRow = await queryOne(
-      `SELECT to_regclass('public.detections') AS reg;`
+      `SELECT name AS reg FROM sqlite_master WHERE type='table' AND name='detections';`
     );
     if (!existsRow || !existsRow.reg) {
       logInfo("detections table doesn't exist yet");
@@ -67,7 +70,7 @@ export async function isDatabaseSeeded(): Promise<boolean> {
     }
 
     // Check row count
-    const countRow = await queryOne(`SELECT COUNT(*)::int AS count FROM detections;`);
+    const countRow = await queryOne(`SELECT COUNT(*) AS count FROM detections;`);
     const count = (countRow?.count as number) || 0;
     logInfo(`detections row count: ${count}`);
     return count > 0;
@@ -79,75 +82,83 @@ export async function isDatabaseSeeded(): Promise<boolean> {
 }
 
 export async function seedDatabase(): Promise<number> {
-  const client = await pool.connect();
-  try {
-    // 1) Ensure schema exists
-    const schemaPath = path.resolve(__dirname, '..', 'data', 'schema.sql');
-    const schemaSql = fs.readFileSync(schemaPath, 'utf8');
-    logInfo(`Executing schema from ${schemaPath}`);
+  // 1) Ensure schema exists
+  const schemaPath = path.resolve(__dirname, '..', 'data', 'schema.sql');
+  const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+  logInfo(`Executing schema from ${schemaPath}`);
 
-    await client.query('BEGIN');
-    for (const statement of splitSqlStatements(schemaSql)) {
-      if (statement.trim().length === 0) continue;
-      await client.query(statement);
+  const db = await getDb();
+  await db.exec('BEGIN');
+  for (const statement of splitSqlStatements(schemaSql)) {
+    if (statement.trim().length === 0) continue;
+    await db.exec(statement);
+  }
+  await db.exec('COMMIT');
+  logInfo('Schema applied');
+
+  // 2) Stream CSV and insert in batches
+  const csvPath = path.resolve(__dirname, '..', 'data', 'work-package-raw-data.csv');
+  if (!fs.existsSync(csvPath)) {
+    logError(`CSV not found at ${csvPath}`);
+    return 0;
+  }
+
+  const fileStream = fs.createReadStream(csvPath);
+  const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+
+  let header: string[] | null = null;
+  let batch: Array<any[]> = [];
+  let totalInserted = 0;
+  let lineNumber = 0;
+
+  const insertSql = `INSERT INTO detections (id, class, t, x, y, heading, vest, speed, area) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
+  for await (const line of rl) {
+    lineNumber += 1;
+    if (lineNumber === 1) {
+      header = parseCsvLine(line);
+      continue;
     }
-    await client.query('COMMIT');
-    logInfo('Schema applied');
 
-    // 2) Stream CSV and insert in batches
-    const csvPath = path.resolve(__dirname, '..', 'data', 'work-package-raw-data.csv');
-    if (!fs.existsSync(csvPath)) {
-      logError(`CSV not found at ${csvPath}`);
-      return 0;
+    if (!header) continue;
+    const fields = parseCsvLine(line);
+    if (fields.length === 0) continue;
+
+    const record = mapCsvToRecord(header, fields);
+    if (!record) {
+      logInfo(`Skipping malformed record at line ${lineNumber}: ${line.substring(0, 100)}...`);
+      continue;
     }
 
-    const fileStream = fs.createReadStream(csvPath);
-    const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
+    batch.push(record);
 
-    let header: string[] | null = null;
-    let batch: Array<any[]> = [];
-    let totalInserted = 0;
-    let lineNumber = 0;
-
-    for await (const line of rl) {
-      lineNumber += 1;
-      if (lineNumber === 1) {
-        header = parseCsvLine(line);
-        continue;
-      }
-
-      if (!header) continue;
-      const fields = parseCsvLine(line);
-      if (fields.length === 0) continue;
-
-      const record = mapCsvToRecord(header, fields);
-      if (!record) continue; // skip malformed
-
-      batch.push(record);
-
-      if (batch.length >= 1000) {
-        const inserted = await insertBatch(client, batch);
+    if (batch.length >= 1000) {
+      try {
+        const inserted = await insertBatch(db, insertSql, batch);
         totalInserted += inserted;
         batch = [];
         if (totalInserted % 10000 === 0) {
-          logInfo(`Inserted ${totalInserted} rows so far...`);
+          logInfo(`Inserted ${totalInserted} rows so far... (at line ${lineNumber})`);
         }
+      } catch (error) {
+        logError(`Failed to insert batch at line ${lineNumber}`, error);
+        throw error;
       }
     }
-
-    if (batch.length > 0) {
-      const inserted = await insertBatch(client, batch);
-      totalInserted += inserted;
-    }
-
-    logInfo(`Seeding complete. Total rows inserted: ${totalInserted}`);
-    return totalInserted;
-  } catch (err) {
-    logError('seedDatabase failed', err);
-    throw err;
-  } finally {
-    client.release();
   }
+
+  if (batch.length > 0) {
+    try {
+      const inserted = await insertBatch(db, insertSql, batch);
+      totalInserted += inserted;
+    } catch (error) {
+      logError(`Failed to insert final batch at line ${lineNumber}`, error);
+      throw error;
+    }
+  }
+
+  logInfo(`Seeding complete. Total rows inserted: ${totalInserted} (processed ${lineNumber - 1} data lines)`);
+  return totalInserted;
 }
 
 function splitSqlStatements(sql: string): string[] {
@@ -200,12 +211,13 @@ function parseCsvLine(line: string): string[] {
 type CsvRecord = [
   id: string,
   klass: string,
-  t: Date,
+  t: string,
   x: number,
   y: number,
   heading: number | null,
   vest: number | null,
-  speed: number | null
+  speed: number | null,
+  area: string | null
 ];
 
 function mapCsvToRecord(header: string[], fields: string[]): CsvRecord | null {
@@ -219,6 +231,7 @@ function mapCsvToRecord(header: string[], fields: string[]): CsvRecord | null {
   const headingIdx = indexOf('heading');
   const vestIdx = indexOf('vest');
   const speedIdx = indexOf('speed');
+  const areaIdx = indexOf('area');
 
   if (idIdx < 0 || typeIdx < 0 || tsIdx < 0 || xIdx < 0 || yIdx < 0) {
     return null;
@@ -232,6 +245,7 @@ function mapCsvToRecord(header: string[], fields: string[]): CsvRecord | null {
   const headingRaw = headingIdx >= 0 ? fields[headingIdx] : '';
   const vestRaw = vestIdx >= 0 ? fields[vestIdx] : '';
   const speedRaw = speedIdx >= 0 ? fields[speedIdx] : '';
+  const areaRaw = areaIdx >= 0 ? fields[areaIdx] : '';
 
   if (!id || !klass || !tRaw || !xRaw || !yRaw) return null;
 
@@ -243,10 +257,11 @@ function mapCsvToRecord(header: string[], fields: string[]): CsvRecord | null {
   const heading = toNumberOrNull(headingRaw);
   const vest = toNumberOrNull(vestRaw);
   const speed = toNumberOrNull(speedRaw);
+  const area = areaRaw || null;
 
   if (x === null || y === null) return null;
 
-  return [id, klass, t, x, y, heading, vest, speed];
+  return [id, klass, t.toISOString(), x, y, heading, vest, speed, area];
 }
 
 function toNumberOrNull(v: string | undefined): number | null {
@@ -257,34 +272,23 @@ function toNumberOrNull(v: string | undefined): number | null {
   return Number.isFinite(num) ? num : null;
 }
 
-async function insertBatch(client: PoolClient, batch: Array<any[]>): Promise<number> {
+async function insertBatch(db: SqliteDb, insertSql: string, batch: Array<any[]>): Promise<number> {
   if (batch.length === 0) return 0;
-
-  const columns = ['id', 'class', 't', 'x', 'y', 'heading', 'vest', 'speed'];
-  const valuesPerRow = columns.length;
-  const params: any[] = [];
-  const valuesSql: string[] = [];
-
-  batch.forEach((row, rowIdx) => {
-    const placeholders: string[] = [];
-    for (let i = 0; i < valuesPerRow; i += 1) {
-      params.push(row[i]);
-      placeholders.push(`$${rowIdx * valuesPerRow + i + 1}`);
-    }
-    valuesSql.push(`(${placeholders.join(',')})`);
-  });
-
-  const sql = `INSERT INTO detections (${columns.join(',')}) VALUES ${valuesSql.join(',')}`;
-
+  await db.exec('BEGIN');
   try {
-    await client.query('BEGIN');
-    await client.query(sql, params);
-    await client.query('COMMIT');
+    const stmt = await db.prepare(insertSql);
+    try {
+      for (const row of batch) {
+        await stmt.run(row);
+      }
+    } finally {
+      await stmt.finalize();
+    }
+    await db.exec('COMMIT');
     return batch.length;
-  } catch (err) {
-    await client.query('ROLLBACK');
-    logError('insertBatch failed', err);
-    throw err;
+  } catch (e) {
+    await db.exec('ROLLBACK');
+    throw e;
   }
 }
 

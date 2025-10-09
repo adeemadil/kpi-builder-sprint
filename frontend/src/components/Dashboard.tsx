@@ -15,14 +15,14 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
     const loadDashboardData = async () => {
       setIsLoading(true);
       try {
-        const now = new Date('2025-04-03T00:00:00.000Z'); // Use data range
-        const last24h = new Date('2025-04-02T00:00:00.000Z'); // Previous day in data
+        const now = new Date('2025-04-02T16:00:18.000Z'); // End of our data range
+        const last24h = new Date('2025-04-02T15:42:06.000Z'); // Start of our data range
 
         // Query total detections
         const totalResult = await api.aggregate({
           metric: 'count',
           filters: {
-            timeRange: { from: new Date(0).toISOString(), to: now.toISOString() },
+            timeRange: { from: last24h.toISOString(), to: now.toISOString() },
             classes: ['human', 'vehicle'],
           },
           groupBy: 'class',
@@ -32,7 +32,7 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
         const uniqueResult = await api.aggregate({
           metric: 'unique_ids',
           filters: {
-            timeRange: { from: new Date(0).toISOString(), to: now.toISOString() },
+            timeRange: { from: last24h.toISOString(), to: now.toISOString() },
             classes: ['human', 'vehicle'],
           },
           groupBy: 'class',
@@ -40,7 +40,7 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
 
         // Query vest violations
         const vestResult = await api.vestViolations(
-          new Date(0).toISOString(),
+          last24h.toISOString(),
           now.toISOString()
         );
 
@@ -48,7 +48,7 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
         const classResult = await api.aggregate({
           metric: 'count',
           filters: {
-            timeRange: { from: new Date(0).toISOString(), to: now.toISOString() },
+            timeRange: { from: last24h.toISOString(), to: now.toISOString() },
             classes: ['human', 'vehicle'],
           },
           groupBy: 'class',
