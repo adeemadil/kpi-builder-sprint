@@ -116,7 +116,7 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     const { metric, filters, groupBy } = req.body || {};
 
     // Validate inputs
-    const allowedMetrics = ['count', 'unique_ids', 'avg_speed'] as const;
+    const allowedMetrics = ['count', 'unique_ids', 'avg_speed', 'vest_violations', 'overspeed'] as const;
     const allowedGroups = ['hour', 'day', 'class', '5min', '1min'] as const;
     if (!allowedMetrics.includes(metric)) {
       return res.status(400).json({ error: 'Invalid metric' });
@@ -125,7 +125,23 @@ router.post('/aggregate', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid groupBy' });
     }
 
-    const { whereSql, params } = buildDetectionsWhere(filters);
+    // For specific metrics, add required filters
+    let enhancedFilters = { ...filters };
+    if (metric === 'vest_violations') {
+      // Vest violations require vest=0 and class='human'
+      enhancedFilters.vest = 0;
+      if (!enhancedFilters.classes || !enhancedFilters.classes.includes('human')) {
+        enhancedFilters.classes = ['human'];
+      }
+    }
+    if (metric === 'overspeed') {
+      // Overspeed requires speedMin filter (default to 1.5 if not provided)
+      if (typeof enhancedFilters.speedMin !== 'number') {
+        enhancedFilters.speedMin = 1.5;
+      }
+    }
+    
+    const { whereSql, params } = buildDetectionsWhere(enhancedFilters);
 
     let groupExpr = '';
     let selectTimeOrLabel = '';
@@ -150,6 +166,8 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     if (metric === 'count') valueExpr = 'CAST(COUNT(*) AS REAL) AS value';
     if (metric === 'unique_ids') valueExpr = 'CAST(COUNT(DISTINCT id) AS REAL) AS value';
     if (metric === 'avg_speed') valueExpr = 'AVG(speed) AS value';
+    if (metric === 'vest_violations') valueExpr = 'CAST(COUNT(*) AS REAL) AS value';
+    if (metric === 'overspeed') valueExpr = 'CAST(COUNT(*) AS REAL) AS value';
 
     const sql = `
       SELECT ${selectTimeOrLabel}, ${valueExpr}

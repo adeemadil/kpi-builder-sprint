@@ -41,7 +41,7 @@ interface SeriesDataPoint {
 }
 
 interface AggregateRequest {
-  metric: 'count' | 'unique_ids' | 'avg_speed';
+  metric: 'count' | 'unique_ids' | 'avg_speed' | 'vest_violations' | 'overspeed';
   filters?: DetectionFilters;
   groupBy: 'hour' | 'day' | 'class' | '5min' | '1min';
 }

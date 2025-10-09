@@ -55,10 +55,29 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     if (initialConfig) {
       isLoadingFromConfig.current = true;
       setMetric(initialConfig.metric);
-      setSelectedClasses(initialConfig.filters.classes || []);
+      
+      // Set appropriate defaults for specific metrics
+      let defaultClasses = initialConfig.filters.classes || [];
+      let defaultVest = initialConfig.filters.vest ?? 'all';
+      const defaultSpeed = initialConfig.filters.speedMin ?? 1.5;
+      
+      if (initialConfig.metric === 'vest_violations') {
+        // Vest violations should default to human class and vest=0
+        if (!defaultClasses.includes('human')) {
+          defaultClasses = ['human'];
+        }
+        defaultVest = 0;
+      } else if (initialConfig.metric === 'close_calls') {
+        // Close calls should have default classes even though not used
+        if (defaultClasses.length === 0) {
+          defaultClasses = ['human', 'vehicle'];
+        }
+      }
+      
+      setSelectedClasses(defaultClasses);
       setSelectedAreas(initialConfig.filters.areas || []);
-      setVestFilter(initialConfig.filters.vest ?? 'all');
-      setSpeedThreshold(initialConfig.filters.speedMin ?? 1.5);
+      setVestFilter(defaultVest);
+      setSpeedThreshold(defaultSpeed);
       setDistanceThreshold(initialConfig.filters.distanceThreshold ?? 2.0);
       setGroupBy(initialConfig.groupBy);
       setTimeBucket(initialConfig.timeBucket || '1hour');
@@ -127,7 +146,8 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
 
   // Apply filters and query backend
   const handleApplyFilters = useCallback(async () => {
-    if (selectedClasses.length === 0) {
+    // Skip class validation for close_calls metric (it uses hardcoded human vs vehicle logic)
+    if (selectedClasses.length === 0 && metric !== 'close_calls') {
       setQueryError('Please select at least one class');
       return;
     }
@@ -171,8 +191,11 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       });
 
       // Map KPI config to API request format
+      const apiMetric = kpiConfig.metric === 'rate' ? 'count' : 
+                       kpiConfig.metric === 'close_calls' ? 'count' : 
+                       kpiConfig.metric;
       const apiRequest = {
-        metric: kpiConfig.metric,
+        metric: apiMetric,
         filters: {
           timeRange: {
             from: fromDate.toISOString(),
@@ -188,21 +211,11 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       
       let results: ApiResponse;
       if (kpiConfig.metric === 'close_calls') {
+        // Keep special endpoint - needs distance JOIN logic
         results = await api.closeCalls({ timeRange: {
           from: fromDate.toISOString(),
           to: toDate.toISOString(),
         } }, distanceThreshold);
-      } else if (kpiConfig.metric === 'vest_violations') {
-        results = await api.vestViolations(
-          fromDate.toISOString(),
-          toDate.toISOString(),
-        );
-      } else if (kpiConfig.metric === 'overspeed') {
-        results = await api.overspeed(
-          fromDate.toISOString(),
-          toDate.toISOString(),
-          speedThreshold,
-        );
       } else if (kpiConfig.metric === 'rate') {
         // For rate, use count and calculate rate manually
         const countResults = (await api.aggregate({
@@ -219,14 +232,8 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
           })) || []
         };
       } else {
-        // For count, unique_ids, avg_speed - use aggregate directly
-        const supportedMetric = kpiConfig.metric === 'count' || kpiConfig.metric === 'unique_ids' || kpiConfig.metric === 'avg_speed' 
-          ? kpiConfig.metric 
-          : 'count';
-        results = await api.aggregate({
-          ...apiRequest,
-          metric: supportedMetric
-        });
+        // For count, unique_ids, avg_speed, vest_violations, overspeed - use aggregate directly
+        results = await api.aggregate(apiRequest);
       }
       
       // Transform API response to match expected format
