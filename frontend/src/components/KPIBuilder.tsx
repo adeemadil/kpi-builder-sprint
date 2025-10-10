@@ -40,7 +40,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   const [distanceThreshold, setDistanceThreshold] = useState<number>(2.0);
   const [groupBy, setGroupBy] = useState<GroupByType>(initialConfig?.groupBy || 'time_bucket');
   const [timeBucket, setTimeBucket] = useState<'1min' | '5min' | '1hour' | '1day'>(
-    (initialConfig?.groupBy === 'time_bucket' ? (initialConfig?.timeBucket as any) : undefined) || '5min'
+    (initialConfig?.groupBy === 'time_bucket' ? (initialConfig?.timeBucket as '1min' | '5min' | '1hour' | '1day') : undefined) || '5min'
   );
   const [chartType, setChartType] = useState<'line' | 'area' | 'bar' | 'table'>('line');
   const [isLoading, setIsLoading] = useState(false);
@@ -106,7 +106,6 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       // Important: mark preset as custom so the preset effect does not overwrite loaded dates
       setTimePreset('custom');
       setCustomTimeRange(initialConfig.filters.timeRange);
-      setHasApplied(false); // Reset to allow auto-apply
       // Reset flag after all updates complete
       setTimeout(() => {
         isLoadingFromConfig.current = false;
@@ -153,6 +152,9 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   }, [timePreset]);
 
   // Build KPI configuration - memoized to prevent unnecessary re-renders
+  const customTimeFrom = customTimeRange.from.getTime();
+  const customTimeTo = customTimeRange.to.getTime();
+  
   const kpiConfig = useMemo<KPIConfig>(() => ({
     metric,
     filters: {
@@ -189,14 +191,30 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     setQueryError(null);
 
     try {
+      // Build config from current state to avoid dependency issues
+      const currentConfig: KPIConfig = {
+        metric,
+        filters: {
+          timeRange: customTimeRange,
+          classes: selectedClasses,
+          areas: selectedAreas.length > 0 ? selectedAreas : undefined,
+          vest: vestFilter,
+          speedMin: metric === 'overspeed' ? speedThreshold : undefined,
+          distanceThreshold: metric === 'close_calls' ? distanceThreshold : undefined,
+        },
+        groupBy,
+        timeBucket: groupBy === 'time_bucket' ? timeBucket : undefined,
+      };
+      
+      
       // Use dataAdapter to handle all API calls, legacy metric mapping, and groupBy logic
-      const transformedData = await queryDetections(kpiConfig);
+      const transformedData = await queryDetections(currentConfig);
       
       setAggregatedData(transformedData);
       console.log('[KPIBuilder] Data set:', {
-        metric: kpiConfig.metric,
+        metric: currentConfig.metric,
         count: transformedData.length,
-        groupBy: kpiConfig.groupBy,
+        groupBy: currentConfig.groupBy,
         firstItem: transformedData[0]
       });
       setHasApplied(true);
@@ -206,7 +224,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     } finally {
       setIsQuerying(false);
     }
-  }, [selectedClasses, kpiConfig, setAggregatedData, setHasApplied, setQueryError, setIsQuerying]);
+  }, [customTimeRange, selectedClasses, selectedAreas, vestFilter, speedThreshold, distanceThreshold, groupBy, timeBucket, metric, setAggregatedData, setHasApplied, setQueryError, setIsQuerying]);
 
   // Load initial config data when initialConfig changes
   useEffect(() => {
@@ -232,7 +250,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
         handleApplyFilters();
       }, 150);
     }
-  }, [initialConfig, hasApplied]); // Removed handleApplyFilters from deps to prevent loop
+  }, [initialConfig, hasApplied]); // eslint-disable-line react-hooks/exhaustive-deps -- Removed handleApplyFilters from deps to prevent loop
 
   const allClasses = ['human', 'vehicle'];
 

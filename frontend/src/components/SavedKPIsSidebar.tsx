@@ -26,14 +26,14 @@ const exampleKPIs: SavedKPI[] = [
     description: 'Hourly count for Apr 2, 2025',
     icon: '⚠️',
     config: {
-      metric: 'count',
+      metric: 'vest_violations',
       filters: {
         timeRange: {
           from: new Date('2025-04-02T00:00:00.000Z'),
           to: new Date('2025-04-02T23:59:59.999Z'),
         },
         classes: ['human'],
-        vest: 0,
+        vest: 'all', // This will be overridden by legacy mapping to vest: 0
       },
       groupBy: 'time_bucket',
       timeBucket: '1hour',
@@ -46,7 +46,7 @@ const exampleKPIs: SavedKPI[] = [
     description: 'Monitor vehicles exceeding speed limits',
     icon: '🚨',
     config: {
-      metric: 'count',
+      metric: 'overspeed',
       filters: {
         timeRange: {
           from: new Date('2025-04-02T00:00:00.000Z'),

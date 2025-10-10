@@ -2,6 +2,36 @@
 
 Base URL: http://localhost:3001/api
 
+## 🧪 Test Suite Overview
+
+The project includes comprehensive test suites for both frontend and backend:
+
+### Backend Tests
+- **Unit Tests**: Jest-based tests for API endpoints and business logic
+- **Ground Truth Tests**: Validates against real dataset (100k records)
+- **Integration Tests**: End-to-end API testing
+
+### Frontend Tests  
+- **Component Tests**: React component testing with Vitest
+- **Unit Tests**: Library function testing
+- **Integration Tests**: UI interaction testing
+
+### Running Tests
+
+```bash
+# Backend tests
+cd backend && npm test
+
+# Backend ground truth tests (uses real database)
+cd backend && npx jest --config jest.groundtruth.config.js
+
+# Frontend tests
+cd frontend && npm test
+
+# All tests
+npm run test:all
+```
+
 ## Health
 ```bash
 curl -s http://localhost:3001/api/health | jq .

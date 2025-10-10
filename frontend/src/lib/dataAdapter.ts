@@ -31,7 +31,7 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
         ...mappedConfig.filters,
         vest: 0,
         classes: (mappedConfig.filters.classes?.includes('human') ? mappedConfig.filters.classes : ['human'])
-      } as any;
+      };
     } else if (mappedConfig.metric === 'overspeed') {
       mappedConfig.metric = 'count';
       mappedConfig.filters = {

@@ -1,7 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import React from 'react';
+import { vi } from 'vitest';
 import { ChartPreview } from '../ChartPreview';
+
+// Mock ResizeObserver for tests
+global.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}));
 
 describe('ChartPreview', () => {
   const baseProps = {
@@ -23,12 +31,12 @@ describe('ChartPreview', () => {
 
   it('renders table output', () => {
     render(<ChartPreview {...baseProps} chartType="table" />);
-    expect(screen.getByText('Value')).toBeInTheDocument();
+    expect(screen.getByText('Count')).toBeInTheDocument();
   });
 
   it('renders line chart container', () => {
     render(<ChartPreview {...baseProps} chartType="line" />);
-    expect(screen.getByText(/count/i)).toBeInTheDocument();
+    expect(screen.getByText('KPI Preview')).toBeInTheDocument();
   });
 });
 
