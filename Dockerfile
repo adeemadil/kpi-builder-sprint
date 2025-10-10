@@ -56,4 +56,4 @@ RUN apk add --no-cache su-exec && \
 EXPOSE 3001
 
 # Seed database and start server
-CMD ["sh", "-c", "echo '🔌 Seeding database...' && cd /app/data && python3 /app/backend/data/seed_sqlite.py && echo '✅ Database seeded successfully' && echo '🚀 Starting backend server...' && cd /app/backend && exec su-exec nodejs npm start"]
+CMD ["sh", "-c", "echo '🔌 Seeding database...' && cd /app/data && python3 /app/backend/data/seed_sqlite.py && echo '✅ Database seeded successfully' && chown -R nodejs:nodejs /app/data && echo '🚀 Starting backend server...' && cd /app/backend && exec su-exec nodejs npm start"]

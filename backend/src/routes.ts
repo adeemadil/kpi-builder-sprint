@@ -228,6 +228,18 @@ router.post('/aggregate', async (req: Request, res: Response) => {
         speedMax: filters?.speedMax,
         timeRange: filters?.timeRange
       },
+      // Vest filter validation
+      vestFilterAnalysis: {
+        originalValue: filters?.vest,
+        appliedClause: filters?.vest !== undefined && filters?.vest !== null && filters?.vest !== 'all' 
+          ? `vest = ${filters.vest}` 
+          : 'NO VEST FILTER APPLIED',
+        expectedBehavior: filters?.vest === 0 ? 'No Vest (Vest Violations)' :
+                         filters?.vest === 1 ? 'Vest Worn' :
+                         filters?.vest === 2 ? 'All Vest Statuses' :
+                         filters?.vest === 'all' ? 'All Vest Statuses' :
+                         'No Vest Filter'
+      },
       enhancedFilters: {
         vest: enhancedFilters?.vest,
         classes: enhancedFilters?.classes,
@@ -310,64 +322,7 @@ router.post('/close-calls', async (req: Request, res: Response) => {
   }
 });
 
-// GET /vest-violations?from=...&to=...
-router.get('/vest-violations', async (req: Request, res: Response) => {
-  try {
-    const { from, to } = req.query as Record<string, string | undefined>;
-    const where: string[] = ['vest = 0', "class = 'human'"];
-    const params: any[] = [];
-    if (from) {
-      params.push(new Date(from).toISOString().replace('T', ' ').replace('Z', ''));
-      where.push(`t >= $${params.length}`);
-    }
-    if (to) {
-      params.push(new Date(to).toISOString().replace('T', ' ').replace('Z', ''));
-      where.push(`t <= $${params.length}`);
-    }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const sql = `
-      SELECT strftime('%Y-%m-%dT00:00:00Z', t) AS time, COUNT(*) AS value
-      FROM detections
-      ${whereSql}
-      GROUP BY strftime('%Y-%m-%dT00:00:00Z', t)
-      ORDER BY strftime('%Y-%m-%dT00:00:00Z', t)
-    `;
-    const rows = await db.query(sql, params);
-    res.json({ series: rows });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch vest violations' });
-  }
-});
-
-// GET /overspeed?from=...&to=...&threshold=...
-router.get('/overspeed', async (req: Request, res: Response) => {
-  try {
-    const { from, to, threshold } = req.query as Record<string, string | undefined>;
-    const th = threshold ? Number(threshold) : 1.5;
-    const where: string[] = ['speed > $1'];
-    const params: any[] = [th];
-    if (from) {
-      params.push(new Date(from).toISOString().replace('T', ' ').replace('Z', ''));
-      where.push(`t >= $${params.length}`);
-    }
-    if (to) {
-      params.push(new Date(to).toISOString().replace('T', ' ').replace('Z', ''));
-      where.push(`t <= $${params.length}`);
-    }
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const sql = `
-      SELECT class AS label, COUNT(*) AS value
-      FROM detections
-      ${whereSql}
-      GROUP BY class
-      ORDER BY class
-    `;
-    const rows = await db.query(sql, params);
-    res.json({ series: rows });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch overspeed stats' });
-  }
-});
+// Legacy routes removed - all requests now go through /aggregate endpoint for consistency
 
 export default router;
 

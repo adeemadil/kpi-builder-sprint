@@ -39,11 +39,16 @@ export function Dashboard({ onCreateKPI }: { onCreateKPI: () => void }) {
           groupBy: 'class',
         });
 
-        // Query vest violations
-        const vestResult = await api.vestViolations(
-          last24h.toISOString(),
-          now.toISOString()
-        );
+        // Query vest violations using /aggregate endpoint
+        const vestResult = await api.aggregate({
+          metric: 'count',
+          filters: {
+            timeRange: { from: last24h.toISOString(), to: now.toISOString() },
+            classes: ['human'],
+            vest: 0, // No vest = vest violations
+          },
+          groupBy: 'day',
+        });
 
         // Query class distribution
         const classResult = await api.aggregate({

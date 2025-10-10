@@ -109,12 +109,5 @@ export const api = {
       body: JSON.stringify({ filters, distance }),
     }),
   
-  // Vest violations
-  vestViolations: (from: string, to: string) =>
-    fetchJSON(`/vest-violations?from=${from}&to=${to}`),
-  
-  // Overspeed
-  overspeed: (from: string, to: string, threshold = 1.5) =>
-    fetchJSON(`/overspeed?from=${from}&to=${to}&threshold=${threshold}`),
 };
 export type { Detection, SeriesDataPoint, DetectionFilters, AggregateRequest, TimeRange };
