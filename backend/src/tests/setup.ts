@@ -53,9 +53,15 @@ export async function cleanDatabase() {
   await db.query('DELETE FROM detections');
 }
 
+// Setup test database (alias for compatibility)
+export async function setupTestDB() {
+  // Database setup is already handled in beforeAll
+  return Promise.resolve();
+}
+
 // Helper to insert test data
 export async function insertTestDetections(count: number = 10) {
-  const detections: Array<{ id: string; class: string; t: string; x: number; y: number; speed: number; heading: number; vest: number; }> = [];
+  const detections: Array<{ id: string; class: string; t: string; x: number; y: number; speed: number; heading: number; vest: number; area: string; }> = [];
   for (let i = 0; i < count; i++) {
     detections.push({
       id: `TEST_${i}`,
@@ -66,13 +72,14 @@ export async function insertTestDetections(count: number = 10) {
       speed: 1.0 + (i * 0.1),
       heading: 45,
       vest: i % 3 === 0 ? 0 : 1,
+      area: String((i % 3) + 1), // Areas 1, 2, 3
     });
   }
   
   for (const det of detections) {
     await db.query(
-      'INSERT INTO detections (id, class, t, x, y, speed, heading, vest) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-      [det.id, det.class, det.t, det.x, det.y, det.speed, det.heading, det.vest]
+      'INSERT INTO detections (id, class, t, x, y, speed, heading, vest, area) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)',
+      [det.id, det.class, det.t, det.x, det.y, det.speed, det.heading, det.vest, det.area]
     );
   }
   

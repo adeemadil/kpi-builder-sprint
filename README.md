@@ -132,6 +132,71 @@ curl -s -X POST http://localhost:3001/api/aggregate \
 - **Detections**: Array of detection objects with coordinates, timestamps, etc.
 - **Aggregations**: Time-series data for charts and KPIs
 
+## Ground Truth Validation
+
+The dataset contains **100,000 detection records** from April 2, 2025 (15:42:06 to 16:00:18 UTC).
+
+### Confirmed Ground Truth Values:
+- **Total Human Detections**: 28,323
+- **Total Vehicle Detections**: 71,677
+- **Vest Violations** (human, vest=0): 10,312
+- **Overspeed Events** (speed > 1.5 m/s): 16,599
+  - Human: 15,013
+  - Vehicle: 1,586
+- **Close Calls** (distance ≤ 2.0m, time ≤ 250ms): 0
+
+### Validation Commands:
+```bash
+# Test vest violations
+curl -X POST http://localhost:3001/api/aggregate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "metric": "vest_violations",
+    "filters": {
+      "timeRange": {"from": "2025-04-02T15:42:06Z", "to": "2025-04-02T16:00:19Z"}
+    },
+    "groupBy": "day"
+  }' | jq '.meta.filteredRecords'
+# Expected: 10312
+
+# Test overspeed by class
+curl -X POST http://localhost:3001/api/aggregate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "metric": "overspeed",
+    "filters": {
+      "timeRange": {"from": "2025-04-02T15:42:06Z", "to": "2025-04-02T16:00:19Z"},
+      "classes": ["human", "vehicle"]
+    },
+    "groupBy": "class"
+  }' | jq '.series'
+# Expected: [{"label": "human", "value": 15013}, {"label": "vehicle", "value": 1586}]
+
+# Test total overspeed events
+curl -X POST http://localhost:3001/api/aggregate \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "metric": "overspeed",
+    "filters": {
+      "timeRange": {"from": "2025-04-02T15:42:06Z", "to": "2025-04-02T16:00:19Z"},
+      "classes": ["human", "vehicle"]
+    },
+    "groupBy": "day"
+  }' | jq '.meta.filteredRecords'
+# Expected: 16599
+
+# Test close calls (should be 0)
+curl -X POST http://localhost:3001/api/close-calls \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "filters": {
+      "timeRange": {"from": "2025-04-02T15:42:06Z", "to": "2025-04-02T16:00:19Z"}
+    },
+    "distance": 2.0
+  }' | jq '.series | map(.value) | add'
+# Expected: 0
+```
+
 ## 🛠️ Development
 
 ### Local Development

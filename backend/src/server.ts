@@ -6,7 +6,7 @@ import * as db from './db';
 
 dotenv.config();
 
-const app = express();
+export const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
 // CORS (development: allow all)

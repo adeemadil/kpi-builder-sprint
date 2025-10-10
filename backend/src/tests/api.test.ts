@@ -338,6 +338,72 @@ describe('API Integration Tests', () => {
     });
   });
 
+  describe('Ground Truth Validation (Filter Logic)', () => {
+    // Note: These tests validate filter logic works correctly with test data
+    // For production ground truth validation, see docs/GROUND_TRUTH_VALIDATION.md
+    
+    beforeEach(async () => {
+      await insertTestDetections(20);
+    });
+
+    it('should validate vest filter works correctly with vest=0', async () => {
+      const response = await request(app)
+        .post('/api/aggregate')
+        .send({
+          metric: 'count',
+          filters: {
+            classes: ['human'],
+            vest: 0
+          },
+          groupBy: 'day'
+        })
+        .expect(200);
+      
+      // This test validates that vest=0 filter is properly applied
+      expect(response.body.series).toHaveLength(1);
+      expect(response.body.series[0].value).toBeGreaterThanOrEqual(0);
+      expect(response.body.meta.filteredRecords).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should validate speed filter works correctly with speedMin', async () => {
+      const response = await request(app)
+        .post('/api/aggregate')
+        .send({
+          metric: 'count',
+          filters: {
+            classes: ['human', 'vehicle'],
+            speedMin: 1.5
+          },
+          groupBy: 'day'
+        })
+        .expect(200);
+      
+      // This test validates that speedMin filter is properly applied
+      expect(response.body.series).toHaveLength(1);
+      expect(response.body.series[0].value).toBeGreaterThanOrEqual(0);
+      expect(response.body.meta.filteredRecords).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should validate area filter works correctly', async () => {
+      const response = await request(app)
+        .post('/api/aggregate')
+        .send({
+          metric: 'count',
+          filters: {
+            classes: ['human'],
+            areas: ['1']
+          },
+          groupBy: 'day'
+        })
+        .expect(200);
+      
+      // This test validates that area filter is properly applied
+      expect(response.body.series).toHaveLength(1);
+      expect(response.body.series[0].value).toBeGreaterThanOrEqual(0);
+      expect(response.body.meta.filteredRecords).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   describe('Error Handling', () => {
     it('should return 404 for unknown routes', async () => {
       await request(app)

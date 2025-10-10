@@ -45,7 +45,7 @@ function buildDetectionsWhere(filters: any | undefined) {
   }
 
   // vest: 0 | 1 (handle both string and number)
-  if (filters.vest !== undefined && filters.vest !== 'all') {
+  if (filters.vest !== undefined && filters.vest !== null && filters.vest !== 'all') {
     const vestValue = Number(filters.vest);
     if (vestValue === 0 || vestValue === 1) {
       params.push(vestValue);
@@ -56,7 +56,7 @@ function buildDetectionsWhere(filters: any | undefined) {
   // speed range
   if (typeof filters.speedMin === 'number') {
     params.push(filters.speedMin);
-    where.push(`speed >= $${params.length}`);
+    where.push(`speed > $${params.length}`);
   }
   if (typeof filters.speedMax === 'number') {
     params.push(filters.speedMax);
@@ -183,14 +183,21 @@ router.post('/aggregate', async (req: Request, res: Response) => {
       whereSql,
       params,
       fullQuery: sql.replace(/\s+/g, ' ').trim(),
-      // ADD: Detailed filter breakdown
+      // Detailed filter breakdown
       receivedFilters: {
         vest: filters?.vest,
         vestType: typeof filters?.vest,
         areas: filters?.areas,
         areasLength: filters?.areas?.length,
         classes: filters?.classes,
+        speedMin: filters?.speedMin,
+        speedMax: filters?.speedMax,
         timeRange: filters?.timeRange
+      },
+      enhancedFilters: {
+        vest: enhancedFilters?.vest,
+        classes: enhancedFilters?.classes,
+        speedMin: enhancedFilters?.speedMin
       }
     });
 
