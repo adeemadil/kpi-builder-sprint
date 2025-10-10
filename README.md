@@ -4,29 +4,34 @@ Dynamic KPI analytics dashboard for industrial safety monitoring with real-time 
 
 ## 🚀 Quick Start
 
-### Option 1: Docker (Recommended)
-**One command to run everything:**
+### Docker (Recommended)
+**One command to run the full stack (backend + frontend):**
 
 ```bash
-./start.sh
+docker compose up --build -d
 ```
 
 This will:
-1. Build and start the backend with Docker
-2. Automatically seed database with 100k records (first run only)
-3. Expose API at http://localhost:3001
-4. Start frontend with: `./scripts/start-frontend.sh`
+1. Build and start the backend (auto-seeds SQLite with 100k rows on first run)
+2. Start the frontend (production preview)
+3. Expose API at http://localhost:3001 and UI at http://localhost:8080
 
-### Option 2: Local Development
-**Backend:**
+Verify:
 ```bash
-./scripts/start-backend.sh
+curl http://localhost:3001/api/health
+open http://localhost:8080
 ```
 
-**Frontend:**
+Useful Docker commands:
 ```bash
-./scripts/start-frontend.sh
+docker compose ps
+docker compose logs -f backend
+docker compose down   # stop services
+docker compose down -v  # stop and reset database volume
 ```
+
+### Option 2: Local Development (advanced)
+Run services locally only if you are not using Docker.
 
 **Check health:**
 ```bash
@@ -53,9 +58,7 @@ kpi-builder-sprint/
 │   │   └── lib/
 │   │       └── api.ts         # Backend API client
 │   └── package.json
-├── scripts/                   # Startup scripts
-│   ├── start-backend.sh       # Backend startup script
-│   └── start-frontend.sh      # Frontend startup script
+├── TESTING.md                 # Scenario-wise curl examples
 ├── docker-compose.yml          # Docker orchestration
 ├── Dockerfile                 # Docker build configuration
 ├── start.sh                   # Docker startup script
@@ -109,6 +112,14 @@ cd backend && npm run test:watch
 
 # Run tests for CI
 cd backend && npm run test:ci
+```
+
+### Run backend tests in Docker (no local Node setup)
+```bash
+docker run --rm -it \
+  -v "$PWD/backend":/app -w /app \
+  -e NODE_ENV=test -e TEST_SQLITE_PATH=./test_kpi_builder.sqlite \
+  node:18-alpine sh -lc "npm ci && npm test"
 ```
 
 ### Manual API Testing
@@ -225,33 +236,7 @@ npm run dev
 ```
 
 ### Docker Development
-**Start with Docker:**
-```bash
-./start.sh
-# or
-npm run docker:up
-```
-
-**View logs:**
-```bash
-npm run docker:logs
-```
-
-**Restart services:**
-```bash
-docker-compose restart backend
-```
-
-**Stop everything:**
-```bash
-npm run docker:down
-```
-
-**Reset database:**
-```bash
-docker-compose down -v  # Removes volume
-npm run docker:up  # Rebuilds and reseeds
-```
+Use the commands above. Avoid running the local backend on port 3001 while Docker is up to prevent EADDRINUSE.
 
 ## ✅ Features
 
@@ -290,6 +275,17 @@ pkill -f "node.*server"
 # Restart backend
 ./scripts/start-backend.sh
 ```
+
+If you see `EADDRINUSE: address already in use :::3001` when running locally:
+```bash
+# Find and kill the process holding 3001
+lsof -i:3001
+kill -9 <PID>
+
+# Or run on another port temporarily
+PORT=3002 npm run dev:backend
+```
+The server is guarded to not auto-start under tests (`NODE_ENV=test`). Avoid running the backend locally while Docker is up (both bind port 3001).
 
 **"Frontend can't reach API"**
 ```bash

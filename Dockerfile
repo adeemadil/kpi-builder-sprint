@@ -24,9 +24,8 @@ FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install Python3 and pandas for data seeding
-RUN apk add --no-cache python3 py3-pip \
-    && pip3 install pandas \
+# Install Python3 and pandas for data seeding (use Alpine package to avoid pip/PEP 668)
+RUN apk add --no-cache python3 py3-pandas \
     && rm -rf /var/cache/apk/*
 
 # Copy backend package files and install production dependencies

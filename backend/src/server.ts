@@ -82,7 +82,9 @@ async function shutdown(signal: string): Promise<void> {
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 
-// Start the server
-void start();
+// Start the server unless running under test environment
+if (process.env.NODE_ENV !== 'test') {
+  void start();
+}
 
 
