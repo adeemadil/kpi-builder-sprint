@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, BarChart3, LineChart as LineChartIcon, AreaChart as AreaChartIcon, Table as TableIcon, Save } from 'lucide-react';
 import { api } from '@/lib/api';
 import { KPIConfig, MetricType, GroupByType } from '@/lib/kpiCalculations';
+import { queryDetections } from '@/lib/dataAdapter';
 import { ChartPreview } from './ChartPreview';
 import { SaveKPIDialog } from './SaveKPIDialog';
 
@@ -17,8 +18,6 @@ interface KPIBuilderProps {
 }
 
 // Local API response types to avoid using any
-type ApiSeriesItem = { label?: string; time?: string; value?: number; timestamp?: string };
-type ApiResponse = { series?: ApiSeriesItem[] };
 
 export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   const [aggregatedData, setAggregatedData] = useState<{label: string; value: number; timestamp?: string}[]>([]);
@@ -89,6 +88,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
         }
       }
       
+      // Apply the calculated defaults
       setSelectedClasses(defaultClasses);
       setSelectedAreas(initialConfig.filters.areas || []);
       setVestFilter(defaultVest);
@@ -189,97 +189,8 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     setQueryError(null);
 
     try {
-      // Ensure Date objects for timeRange (guard against strings in initialConfig)
-      const fromDate = new Date(kpiConfig.filters.timeRange.from as unknown as string | number | Date);
-      const toDate = new Date(kpiConfig.filters.timeRange.to as unknown as string | number | Date);
-      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
-        throw new Error('Invalid time range');
-      }
-      // Use the CURRENT state timeBucket so user changes take effect after loading a saved KPI
-      const actualTimeBucket = timeBucket;
-
-      // Transform UI groupBy to backend format using the actual timeBucket
-      const transformedGroupBy = (kpiConfig.groupBy === 'time_bucket' ? 
-                 (actualTimeBucket === '1day' ? 'day' : 
-                  actualTimeBucket === '1hour' ? 'hour' :
-                  actualTimeBucket === '5min' ? '5min' :
-                  actualTimeBucket === '1min' ? '1min' : '5min') : 
-                 kpiConfig.groupBy === 'class' ? 'class' : '5min') as 'hour' | 'day' | 'class' | '5min' | '1min';
-
-      console.log('[KPIBuilder] Transform mapping:', {
-        uiGroupBy: kpiConfig.groupBy,
-        uiTimeBucket: kpiConfig.groupBy === 'time_bucket' ? actualTimeBucket : 'N/A',
-        backendGroupBy: transformedGroupBy,
-        stateTimeBucket: timeBucket,
-        configTimeBucket: initialConfig?.timeBucket,
-        filters: {
-          classes: kpiConfig.filters.classes,
-          timeRange: {
-            from: fromDate.toISOString(),
-            to: toDate.toISOString()
-          }
-        }
-      });
-
-      console.log('[KPIBuilder] Filter values being sent:', {
-        vest: kpiConfig.filters.vest,
-        vestConverted: kpiConfig.filters.vest === 'all' ? undefined : Number(kpiConfig.filters.vest),
-        areas: selectedAreas,
-        classes: kpiConfig.filters.classes
-      });
-
-      // Map KPI config to API request format
-      const apiMetric = kpiConfig.metric === 'rate' ? 'count' : 
-                       kpiConfig.metric === 'close_calls' ? 'count' : 
-                       kpiConfig.metric;
-      const apiRequest = {
-        metric: apiMetric,
-        filters: {
-          timeRange: {
-            from: fromDate.toISOString(),
-            to: toDate.toISOString(),
-          },
-          classes: kpiConfig.filters.classes,
-          areas: selectedAreas.length > 0 ? selectedAreas : undefined,
-          vest: kpiConfig.filters.vest === 'all' ? undefined : Number(kpiConfig.filters.vest),
-          speedMin: kpiConfig.filters.speedMin,
-        },
-        groupBy: transformedGroupBy
-      };
-      
-      let results: ApiResponse;
-      if (kpiConfig.metric === 'close_calls') {
-        // Keep special endpoint - needs distance JOIN logic
-        results = await api.closeCalls({ timeRange: {
-          from: fromDate.toISOString(),
-          to: toDate.toISOString(),
-        } }, distanceThreshold);
-      } else if (kpiConfig.metric === 'rate') {
-        // For rate, use count and calculate rate manually
-        const countResults = (await api.aggregate({
-          ...apiRequest,
-          metric: 'count'
-        })) as ApiResponse;
-        // Calculate rate (events per hour)
-        const timeRangeHours = 
-          (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60);
-        results = {
-          series: countResults.series?.map((item: ApiSeriesItem) => ({
-            ...item,
-            value: (item.value ?? 0) / Math.max(timeRangeHours, 1)
-          })) || []
-        };
-      } else {
-        // For count, unique_ids, avg_speed, vest_violations, overspeed - use aggregate directly
-        results = await api.aggregate(apiRequest);
-      }
-      
-      // Transform API response to match expected format
-      const transformedData = results.series?.map((item: ApiSeriesItem) => ({
-        label: item.label || item.time || 'Unknown',
-        value: item.value ?? 0,
-        timestamp: item.time || item.timestamp,
-      })) || [];
+      // Use dataAdapter to handle all API calls, legacy metric mapping, and groupBy logic
+      const transformedData = await queryDetections(kpiConfig);
       
       setAggregatedData(transformedData);
       console.log('[KPIBuilder] Data set:', {

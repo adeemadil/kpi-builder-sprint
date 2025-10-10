@@ -51,7 +51,20 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
           to: mappedConfig.filters.timeRange.to.toISOString(),
         },
         classes: mappedConfig.filters.classes,
-        vest: mappedConfig.filters.vest === 'all' ? undefined : mappedConfig.filters.vest,
+        vest: (() => {
+          // Use the mapped config's vest value (after legacy mapping)
+          let result: number;
+          
+          if (mappedConfig.filters.vest === 'all') {
+            result = 2; // All vest statuses
+          } else if (typeof mappedConfig.filters.vest === 'number') {
+            result = mappedConfig.filters.vest; // 0 or 1
+          } else {
+            result = 0; // fallback
+          }
+          
+          return result;
+        })(),
         speedMin: mappedConfig.filters.speedMin,
       },
       groupBy: (mappedConfig.groupBy === 'time_bucket' ?

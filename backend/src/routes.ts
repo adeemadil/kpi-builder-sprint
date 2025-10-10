@@ -44,12 +44,15 @@ function buildDetectionsWhere(filters: any | undefined) {
     where.push(`area IN (${placeholders.join(',')})`);
   }
 
-  // vest: 0 | 1 (handle both string and number)
+  // vest: 0 | 1 | 2 (handle both string and number, where 2 = both 0 and 1)
   if (filters.vest !== undefined && filters.vest !== null && filters.vest !== 'all') {
     const vestValue = Number(filters.vest);
     if (vestValue === 0 || vestValue === 1) {
       params.push(vestValue);
       where.push(`vest = $${params.length}`);
+    } else if (vestValue === 2) {
+      // vest = 2 means both 0 and 1, so no vest filter is applied
+      // This allows both vest values to be included in results
     }
   }
 

@@ -42,6 +42,13 @@ The KPI Builder uses a standardized metrics model that separates core metrics fr
   - Safety analysis
   - Risk assessment
 
+## Filter Values
+
+### Vest Status
+- **0**: No vest (vest violations)
+- **1**: Wearing vest
+- **2**: All vest statuses (both 0 and 1)
+
 ## Grouping Options
 
 ### Time Bucket
@@ -92,6 +99,20 @@ For backward compatibility, legacy metric names are automatically mapped:
   "metric": "count",
   "filters": {
     "vest": 0,
+    "classes": ["human"],
+    "timeRange": { "from": "...", "to": "..." }
+  },
+  "groupBy": "time_bucket",
+  "timeBucket": "1hour"
+}
+```
+
+### All Vest Status Analysis
+```json
+{
+  "metric": "count",
+  "filters": {
+    "vest": 2,
     "classes": ["human"],
     "timeRange": { "from": "...", "to": "..." }
   },
