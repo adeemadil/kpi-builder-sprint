@@ -77,6 +77,11 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
           defaultClasses = ['human'];
         }
         defaultVest = 0;
+        // Map legacy metric to core metric for UI display
+        setMetric('count');
+      } else if (initialConfig.metric === 'overspeed') {
+        // Map legacy metric to core metric for UI display
+        setMetric('count');
       } else if (initialConfig.metric === 'close_calls') {
         // Close calls should have default classes even though not used
         if (defaultClasses.length === 0) {
@@ -380,8 +385,6 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
                   <SelectItem value="avg_speed">Average Speed</SelectItem>
                   <SelectItem value="rate">Events per Hour</SelectItem>
                   <SelectItem value="close_calls">Close Calls</SelectItem>
-                  <SelectItem value="vest_violations">Vest Violations</SelectItem>
-                  <SelectItem value="overspeed">Overspeed Events</SelectItem>
                 </SelectContent>
               </Select>
             </CardContent>

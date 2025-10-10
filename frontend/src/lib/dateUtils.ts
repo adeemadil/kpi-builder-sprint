@@ -53,6 +53,21 @@ export const formatTimestamp = (
   }
 };
 
+// Helper function to format non-time labels (area, asset_id, etc.)
+export const formatLabel = (label: string, groupBy?: string): string => {
+  if (!label) return '';
+  
+  if (groupBy === 'area') {
+    return `Area ${label}`;
+  } else if (groupBy === 'asset_id') {
+    return `Asset ${label}`;
+  } else if (groupBy === 'class') {
+    return label.charAt(0).toUpperCase() + label.slice(1).replace('_', ' ');
+  }
+  
+  return label;
+};
+
 // Function to format tooltip labels
 export const formatTooltipLabel = (timestamp: string): string => {
   if (!timestamp) return '';

@@ -7,6 +7,7 @@ export type MetricType =
   | 'avg_speed' 
   | 'rate' 
   | 'close_calls' 
+  // legacy names kept for backward-compat load/mapping only
   | 'vest_violations' 
   | 'overspeed';
 

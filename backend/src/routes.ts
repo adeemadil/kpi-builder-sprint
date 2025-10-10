@@ -113,11 +113,29 @@ router.post('/detections', async (req: Request, res: Response) => {
 router.post('/aggregate', async (req: Request, res: Response) => {
   try {
     const startMs = Date.now();
-    const { metric, filters, groupBy } = req.body || {};
+    let { metric, filters, groupBy } = req.body || {};
+
+    // Backward-compatible legacy metric aliases → map to core metric + filters
+    // - vest_violations => count with vest=0 and class human
+    // - overspeed       => count with speedMin (default 1.5 if not provided)
+    if (metric === 'vest_violations') {
+      metric = 'count';
+      filters = filters || {};
+      filters.vest = 0;
+      if (!Array.isArray(filters.classes) || filters.classes.length === 0 || !filters.classes.includes('human')) {
+        filters.classes = ['human'];
+      }
+    } else if (metric === 'overspeed') {
+      metric = 'count';
+      filters = filters || {};
+      if (typeof filters.speedMin !== 'number') {
+        filters.speedMin = 1.5;
+      }
+    }
 
     // Validate inputs
-    const allowedMetrics = ['count', 'unique_ids', 'avg_speed', 'vest_violations', 'overspeed'] as const;
-    const allowedGroups = ['hour', 'day', 'class', '5min', '1min'] as const;
+    const allowedMetrics = ['count', 'unique_ids', 'avg_speed'] as const;
+    const allowedGroups = ['hour', 'day', 'class', 'area', '5min', '1min'] as const;
     if (!allowedMetrics.includes(metric)) {
       return res.status(400).json({ error: 'Invalid metric' });
     }
@@ -125,21 +143,8 @@ router.post('/aggregate', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid groupBy' });
     }
 
-    // For specific metrics, add required filters
+    // For specific metrics, add required filters (none for core metrics)
     let enhancedFilters = { ...filters };
-    if (metric === 'vest_violations') {
-      // Vest violations require vest=0 and class='human'
-      enhancedFilters.vest = 0;
-      if (!enhancedFilters.classes || !enhancedFilters.classes.includes('human')) {
-        enhancedFilters.classes = ['human'];
-      }
-    }
-    if (metric === 'overspeed') {
-      // Overspeed requires speedMin filter (default to 1.5 if not provided)
-      if (typeof enhancedFilters.speedMin !== 'number') {
-        enhancedFilters.speedMin = 1.5;
-      }
-    }
     
     const { whereSql, params } = buildDetectionsWhere(enhancedFilters);
 
@@ -159,6 +164,12 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     } else if (groupBy === '1min') {
       groupExpr = `strftime('%Y-%m-%dT%H:%M:00Z', t)`;
       selectTimeOrLabel = `${groupExpr} AS time`;
+    } else if (groupBy === '1min') {
+      groupExpr = `strftime('%Y-%m-%dT%H:%M:00Z', t)`;
+      selectTimeOrLabel = `${groupExpr} AS time`;
+    } else if (groupBy === 'area') {
+      groupExpr = `area`;
+      selectTimeOrLabel = `area AS label`;
     } else {
       groupExpr = `class`;
       selectTimeOrLabel = `class AS label`;

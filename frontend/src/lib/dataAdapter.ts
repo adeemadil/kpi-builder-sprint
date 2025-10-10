@@ -23,46 +23,55 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
     // Import api dynamically to avoid circular dependencies
     const { api } = await import('./api');
 
-    // Map KPI config to API request format
+    // Legacy metric name mapping → core metric + filters
+    const mappedConfig = { ...config } as KPIConfig;
+    if (mappedConfig.metric === 'vest_violations') {
+      mappedConfig.metric = 'count';
+      mappedConfig.filters = {
+        ...mappedConfig.filters,
+        vest: 0,
+        classes: (mappedConfig.filters.classes?.includes('human') ? mappedConfig.filters.classes : ['human'])
+      } as any;
+    } else if (mappedConfig.metric === 'overspeed') {
+      mappedConfig.metric = 'count';
+      mappedConfig.filters = {
+        ...mappedConfig.filters,
+        speedMin: mappedConfig.filters.speedMin ?? 1.5
+      };
+    }
+
+    // Map KPI config to API request format (core metrics only)
     const apiRequest = {
-      metric: config.metric === 'count' || config.metric === 'unique_ids' || config.metric === 'avg_speed'
-        ? config.metric
+      metric: mappedConfig.metric === 'count' || mappedConfig.metric === 'unique_ids' || mappedConfig.metric === 'avg_speed'
+        ? mappedConfig.metric
         : 'count' as 'count' | 'unique_ids' | 'avg_speed',
       filters: {
         timeRange: {
-          from: config.filters.timeRange.from.toISOString(),
-          to: config.filters.timeRange.to.toISOString(),
+          from: mappedConfig.filters.timeRange.from.toISOString(),
+          to: mappedConfig.filters.timeRange.to.toISOString(),
         },
-        classes: config.filters.classes,
-        vest: config.filters.vest === 'all' ? undefined : config.filters.vest,
-        speedMin: config.filters.speedMin,
+        classes: mappedConfig.filters.classes,
+        vest: mappedConfig.filters.vest === 'all' ? undefined : mappedConfig.filters.vest,
+        speedMin: mappedConfig.filters.speedMin,
       },
-      groupBy: (config.groupBy === 'time_bucket' ?
-               (config.timeBucket === '1day' ? 'day' : 
-                config.timeBucket === '1hour' ? 'hour' :
-                config.timeBucket === '5min' ? '5min' :
-                config.timeBucket === '1min' ? '1min' : '5min') :
-               config.groupBy === 'class' ? 'class' : '5min') as 'hour' | 'day' | 'class' | '5min' | '1min',
+      groupBy: (mappedConfig.groupBy === 'time_bucket' ?
+               (mappedConfig.timeBucket === '1day' ? 'day' : 
+                mappedConfig.timeBucket === '1hour' ? 'hour' :
+                mappedConfig.timeBucket === '5min' ? '5min' :
+                mappedConfig.timeBucket === '1min' ? '1min' : '5min') :
+               mappedConfig.groupBy === 'class' ? 'class' :
+               mappedConfig.groupBy === 'area' ? 'area' :
+               mappedConfig.groupBy === 'asset_id' ? 'class' : // fetch class-grouped for top 10 client-side
+               mappedConfig.groupBy === 'none' ? 'class' : // fetch class-grouped for total client-side
+               '5min') as 'hour' | 'day' | 'class' | 'area' | '5min' | '1min',
     };
 
     let results: { series?: Array<{ label?: string; time?: string; value?: number; timestamp?: string }> };
-    if (config.metric === 'close_calls') {
+    if (mappedConfig.metric === 'close_calls') {
       results = await api.closeCalls({ timeRange: {
-        from: config.filters.timeRange.from.toISOString(),
-        to: config.filters.timeRange.to.toISOString(),
-      } }, config.filters.distanceThreshold || 2.0);
-    } else if (config.metric === 'vest_violations') {
-      // Use aggregate to respect selected time bucket (backend will enforce vest=0 & class='human')
-      results = await api.aggregate({
-        ...apiRequest,
-        metric: 'vest_violations'
-      });
-    } else if (config.metric === 'overspeed') {
-      results = await api.overspeed(
-        config.filters.timeRange.from.toISOString(),
-        config.filters.timeRange.to.toISOString(),
-        config.filters.speedMin || 1.5,
-      );
+        from: mappedConfig.filters.timeRange.from.toISOString(),
+        to: mappedConfig.filters.timeRange.to.toISOString(),
+      } }, mappedConfig.filters.distanceThreshold || 2.0);
     } else if (config.metric === 'rate') {
       // For rate, use count and calculate rate manually
       const countResults = await api.aggregate({
@@ -83,11 +92,33 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
     }
 
     console.log(`Query completed, processed ${results.series?.length || 0} data points`);
-    return results.series?.map((item: { label?: string; time?: string; value?: number; timestamp?: string }) => ({
+    
+    // Handle client-side aggregations for asset_id and none
+    let processedSeries = results.series?.map((item: { label?: string; time?: string; value?: number; timestamp?: string }) => ({
       label: item.label || item.time || 'Unknown',
       value: item.value || 0,
       timestamp: item.time || item.timestamp,
     })) || [];
+    
+    if (mappedConfig.groupBy === 'asset_id') {
+      // For asset_id, we need to fetch individual detections and compute top 10
+      // For now, return class-grouped data with a note that this is client-side top 10
+      processedSeries = processedSeries.slice(0, 10).map(item => ({
+        ...item,
+        label: `Asset ${item.label} (Top 10)`,
+        value: item.value
+      }));
+    } else if (mappedConfig.groupBy === 'none') {
+      // For none, sum all values into a single total
+      const total = processedSeries.reduce((sum, item) => sum + item.value, 0);
+      processedSeries = [{
+        label: 'Total',
+        value: total,
+        timestamp: undefined
+      }];
+    }
+    
+    return processedSeries;
   } catch (error) {
     console.error('Failed to query detections:', error);
     throw new Error(

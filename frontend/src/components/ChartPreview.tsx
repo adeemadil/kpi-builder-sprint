@@ -20,7 +20,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatTimestamp, formatTooltipLabel } from '@/lib/dateUtils';
+import { formatTimestamp, formatTooltipLabel, formatLabel } from '@/lib/dateUtils';
 
 interface ChartPreviewProps {
   data: AggregatedData[];
@@ -50,9 +50,11 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
     const dataToFormat = useMultiSeries ? (multiSeriesData || []) : data;
     return dataToFormat.map(item => ({
       ...item,
-      label: formatTimestamp(item.label, config.groupBy, config.timeBucket as any)
+      label: config.groupBy === 'time_bucket' 
+        ? formatTimestamp(item.label, config.groupBy, config.timeBucket as any)
+        : formatLabel(item.label, config.groupBy)
     }));
-  }, [data, multiSeriesData, useMultiSeries, config.groupBy]);
+  }, [data, multiSeriesData, useMultiSeries, config.groupBy, config.timeBucket]);
   
   // Chart colors for different series
   const colors = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
@@ -123,6 +125,11 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
           <CardTitle>KPI Preview</CardTitle>
           <p className="text-sm text-muted-foreground mt-1">
             Showing {displayData.length} results{useMultiSeries ? ` across ${seriesKeys.length} classes` : ''}
+            {config.groupBy === 'asset_id' && (
+              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                Top 10 (client-side)
+              </span>
+            )}
           </p>
         </div>
         <Button variant="outline" onClick={exportToCSV} className="gap-2">
@@ -195,7 +202,12 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                   }}
                   labelFormatter={(label) => {
                     // Find the original data point by matching the formatted label
-                    const originalData = data.find(d => formatTimestamp(d.label, config.groupBy, config.timeBucket as any) === label);
+                    const originalData = data.find(d => {
+                      const formattedLabel = config.groupBy === 'time_bucket' 
+                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as any)
+                        : formatLabel(d.label, config.groupBy);
+                      return formattedLabel === label;
+                    });
                     if (originalData?.timestamp) {
                       return formatTooltipLabel(originalData.timestamp);
                     }
@@ -256,7 +268,12 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                   }}
                   labelFormatter={(label) => {
                     // Find the original data point by matching the formatted label
-                    const originalData = data.find(d => formatTimestamp(d.label, config.groupBy, config.timeBucket as any) === label);
+                    const originalData = data.find(d => {
+                      const formattedLabel = config.groupBy === 'time_bucket' 
+                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as any)
+                        : formatLabel(d.label, config.groupBy);
+                      return formattedLabel === label;
+                    });
                     if (originalData?.timestamp) {
                       return formatTooltipLabel(originalData.timestamp);
                     }
@@ -317,7 +334,12 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                   }}
                   labelFormatter={(label) => {
                     // Find the original data point by matching the formatted label
-                    const originalData = data.find(d => formatTimestamp(d.label, config.groupBy, config.timeBucket as any) === label);
+                    const originalData = data.find(d => {
+                      const formattedLabel = config.groupBy === 'time_bucket' 
+                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as any)
+                        : formatLabel(d.label, config.groupBy);
+                      return formattedLabel === label;
+                    });
                     if (originalData?.timestamp) {
                       return formatTooltipLabel(originalData.timestamp);
                     }

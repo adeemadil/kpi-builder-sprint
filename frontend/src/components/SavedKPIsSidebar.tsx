@@ -26,7 +26,7 @@ const exampleKPIs: SavedKPI[] = [
     description: 'Hourly count for Apr 2, 2025',
     icon: '⚠️',
     config: {
-      metric: 'vest_violations',
+      metric: 'count',
       filters: {
         timeRange: {
           from: new Date('2025-04-02T00:00:00.000Z'),
@@ -46,7 +46,7 @@ const exampleKPIs: SavedKPI[] = [
     description: 'Monitor vehicles exceeding speed limits',
     icon: '🚨',
     config: {
-      metric: 'overspeed',
+      metric: 'count',
       filters: {
         timeRange: {
           from: new Date('2025-04-02T00:00:00.000Z'),
