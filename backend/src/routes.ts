@@ -152,7 +152,9 @@ router.post('/aggregate', async (req: Request, res: Response) => {
       groupExpr = `strftime('%Y-%m-%dT00:00:00Z', t)`;
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else if (groupBy === '5min') {
-      groupExpr = `strftime('%Y-%m-%dT%H:%M:00Z', t)`;
+      // Floor timestamps to 5-minute boundaries using unixepoch math
+      // Example: 15:07 -> 15:05, 15:09 -> 15:05, 15:10 -> 15:10
+      groupExpr = `strftime('%Y-%m-%dT%H:%M:00Z', ((CAST(strftime('%s', t) AS INTEGER) / 300) * 300), 'unixepoch')`;
       selectTimeOrLabel = `${groupExpr} AS time`;
     } else if (groupBy === '1min') {
       groupExpr = `strftime('%Y-%m-%dT%H:%M:00Z', t)`;

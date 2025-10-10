@@ -170,6 +170,48 @@ async function analyzeCSV() {
   console.log(`  /api/aggregate?metric=count&groupBy=class → should return ${Object.keys(classCounts).length} classes`);
   console.log('');
 
+  // Time-Bucket Sanity Check (1min vs 5min)
+  console.log('🕒 TIME-BUCKET SANITY CHECK:');
+  const toMinuteBucket = (iso: string) => {
+    const d = new Date(iso);
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mi = String(d.getUTCMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}:00Z`;
+  };
+  const toFiveMinBucket = (iso: string) => {
+    const d = new Date(iso);
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const floored = Math.floor(d.getUTCMinutes() / 5) * 5;
+    const mi = String(floored).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}:00Z`;
+  };
+
+  const minuteBuckets: Record<string, number> = {};
+  const fiveMinBuckets: Record<string, number> = {};
+  rows.forEach(r => {
+    const m1 = toMinuteBucket(r.timestamp);
+    const m5 = toFiveMinBucket(r.timestamp);
+    minuteBuckets[m1] = (minuteBuckets[m1] || 0) + 1;
+    fiveMinBuckets[m5] = (fiveMinBuckets[m5] || 0) + 1;
+  });
+
+  const minuteBucketKeys = Object.keys(minuteBuckets).sort();
+  const fiveMinBucketKeys = Object.keys(fiveMinBuckets).sort();
+  console.log(`  Distinct 1min buckets: ${minuteBucketKeys.length}`);
+  console.log(`  Distinct 5min buckets: ${fiveMinBucketKeys.length}`);
+  if (minuteBucketKeys.length && fiveMinBucketKeys.length) {
+    console.log('  Sample 1min buckets:', minuteBucketKeys.slice(0, 5));
+    console.log('  Sample 5min buckets:', fiveMinBucketKeys.slice(0, 5));
+  }
+  console.log('  Expectation: 5min bucket count should be fewer than 1min for the same range.');
+  console.log('');
+
   console.log('✅ Analysis complete! Use these numbers to validate your API responses.');
 }
 

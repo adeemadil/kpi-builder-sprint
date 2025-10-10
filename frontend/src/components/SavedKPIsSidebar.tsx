@@ -22,8 +22,8 @@ interface SavedKPIsSidebarProps {
 const exampleKPIs: SavedKPI[] = [
   {
     id: 'example-1',
-    name: 'Vest Violations - Last 7 Days',
-    description: 'Track safety vest compliance over the past week',
+    name: 'Vest Violations – Apr 2 (Hourly)',
+    description: 'Hourly count for Apr 2, 2025',
     icon: '⚠️',
     config: {
       metric: 'vest_violations',
@@ -36,7 +36,7 @@ const exampleKPIs: SavedKPI[] = [
         vest: 0,
       },
       groupBy: 'time_bucket',
-      timeBucket: '1day',
+      timeBucket: '1hour',
     },
     createdAt: new Date('2025-04-02T15:45:00.000Z').toISOString(),
   },
@@ -181,7 +181,24 @@ export function SavedKPIsSidebar({ onLoadKPI }: SavedKPIsSidebarProps) {
                   size="sm"
                   variant="outline"
                   className="flex-1 gap-1.5"
-                  onClick={() => onLoadKPI(kpi.config)}
+                  onClick={() => {
+                    console.log('[SavedKPI] Load clicked:', kpi.name);
+                    console.log('[SavedKPI] Config being sent:', {
+                      metric: kpi.config.metric,
+                      groupBy: kpi.config.groupBy,
+                      timeBucket: kpi.config.timeBucket,
+                      filters: kpi.config.filters
+                    });
+                    
+                    // Deep clone to ensure new object reference every click
+                    const clonedConfig = JSON.parse(JSON.stringify(kpi.config));
+                    // Convert date strings back to Date objects
+                    clonedConfig.filters.timeRange.from = new Date(clonedConfig.filters.timeRange.from);
+                    clonedConfig.filters.timeRange.to = new Date(clonedConfig.filters.timeRange.to);
+                    
+                    console.log('[SavedKPI] Cloned config:', clonedConfig);
+                    onLoadKPI(clonedConfig);
+                  }}
                 >
                   <Play className="h-3 w-3" />
                   Load

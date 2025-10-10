@@ -52,10 +52,11 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
         to: config.filters.timeRange.to.toISOString(),
       } }, config.filters.distanceThreshold || 2.0);
     } else if (config.metric === 'vest_violations') {
-      results = await api.vestViolations(
-        config.filters.timeRange.from.toISOString(),
-        config.filters.timeRange.to.toISOString(),
-      );
+      // Use aggregate to respect selected time bucket (backend will enforce vest=0 & class='human')
+      results = await api.aggregate({
+        ...apiRequest,
+        metric: 'vest_violations'
+      });
     } else if (config.metric === 'overspeed') {
       results = await api.overspeed(
         config.filters.timeRange.from.toISOString(),

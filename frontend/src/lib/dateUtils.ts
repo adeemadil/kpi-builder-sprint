@@ -1,35 +1,51 @@
 // Utility function to format timestamps for display in charts
-export const formatTimestamp = (timestamp: string, groupBy?: string): string => {
+export const formatTimestamp = (
+  timestamp: string,
+  groupBy?: string,
+  timeBucket?: '1min' | '5min' | '1hour' | '1day'
+): string => {
   if (!timestamp) return '';
   
   try {
     const date = new Date(timestamp);
-    
-    // For hourly grouping, show just the hour
-    if (groupBy === 'hour' || timestamp.includes('T') && timestamp.endsWith('00:00Z')) {
-      return date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        hour12: true 
-      });
+
+    // If grouping by time buckets, follow the selected bucket explicitly
+    if (groupBy === 'time_bucket') {
+      if (timeBucket === '1day') {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+      if (timeBucket === '1hour') {
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+      }
+      // For 1min / 5min buckets show hour:minute
+      return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
     }
-    
-    // For daily grouping, show just the date
+
+    // For daily grouping, show just the date (check FIRST to avoid midnight being treated as an hour)
     if (groupBy === 'day' || timestamp.includes('T00:00:00Z')) {
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
       });
     }
-    
-    // For minute-level grouping, show time
-    if (timestamp.includes('T') && timestamp.includes(':00Z')) {
-      return date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
+
+    // For hourly grouping, show the hour. Detect :00:00Z but not 00:00:00Z (already handled above)
+    if (groupBy === 'hour' || /T\d{2}:00:00Z$/.test(timestamp)) {
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        hour12: true,
+      });
+    }
+
+    // For minute-level grouping, show time with minutes
+    if (timestamp.includes('T')) {
+      return date.toLocaleTimeString('en-US', {
+        hour: 'numeric',
         minute: '2-digit',
-        hour12: true 
+        hour12: true,
       });
     }
-    
+
     // Default: show the full timestamp
     return timestamp;
   } catch (error) {

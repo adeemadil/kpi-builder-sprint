@@ -50,7 +50,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
     const dataToFormat = useMultiSeries ? (multiSeriesData || []) : data;
     return dataToFormat.map(item => ({
       ...item,
-      label: formatTimestamp(item.label, config.groupBy)
+      label: formatTimestamp(item.label, config.groupBy, config.timeBucket as any)
     }));
   }, [data, multiSeriesData, useMultiSeries, config.groupBy]);
   
@@ -193,7 +193,15 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '0.5rem',
                   }}
-                  labelFormatter={(label) => formatTooltipLabel(data.find(d => d.label === label)?.timestamp || label)}
+                  labelFormatter={(label) => {
+                    // Find the original data point by matching the formatted label
+                    const originalData = data.find(d => formatTimestamp(d.label, config.groupBy, config.timeBucket as any) === label);
+                    if (originalData?.timestamp) {
+                      return formatTooltipLabel(originalData.timestamp);
+                    }
+                    // If no timestamp found, return the formatted label as-is
+                    return label;
+                  }}
                 />
                 <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}
@@ -246,7 +254,15 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '0.5rem',
                   }}
-                  labelFormatter={(label) => formatTooltipLabel(data.find(d => d.label === label)?.timestamp || label)}
+                  labelFormatter={(label) => {
+                    // Find the original data point by matching the formatted label
+                    const originalData = data.find(d => formatTimestamp(d.label, config.groupBy, config.timeBucket as any) === label);
+                    if (originalData?.timestamp) {
+                      return formatTooltipLabel(originalData.timestamp);
+                    }
+                    // If no timestamp found, return the formatted label as-is
+                    return label;
+                  }}
                 />
                 <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}
@@ -299,7 +315,15 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     border: '1px solid hsl(var(--border))',
                     borderRadius: '0.5rem',
                   }}
-                  labelFormatter={(label) => formatTooltipLabel(data.find(d => d.label === label)?.timestamp || label)}
+                  labelFormatter={(label) => {
+                    // Find the original data point by matching the formatted label
+                    const originalData = data.find(d => formatTimestamp(d.label, config.groupBy, config.timeBucket as any) === label);
+                    if (originalData?.timestamp) {
+                      return formatTooltipLabel(originalData.timestamp);
+                    }
+                    // If no timestamp found, return the formatted label as-is
+                    return label;
+                  }}
                 />
                 <Legend 
                   wrapperStyle={{ paddingTop: '20px' }}

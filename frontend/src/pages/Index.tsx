@@ -16,6 +16,13 @@ const Index = () => {
   };
 
   const handleLoadKPI = (config: KPIConfig) => {
+    console.log('[Index] ===== LOAD KPI REQUEST =====');
+    console.log('[Index] Config received:', {
+      metric: config.metric,
+      groupBy: config.groupBy,
+      timeBucket: config.timeBucket,
+      timestamp: new Date().toISOString()
+    });
     setSelectedKPIConfig(config);
     setCurrentView('builder');
   };

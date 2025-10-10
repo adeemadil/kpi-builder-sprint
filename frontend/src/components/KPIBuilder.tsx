@@ -40,7 +40,9 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   const [speedThreshold, setSpeedThreshold] = useState<number>(1.5);
   const [distanceThreshold, setDistanceThreshold] = useState<number>(2.0);
   const [groupBy, setGroupBy] = useState<GroupByType>(initialConfig?.groupBy || 'time_bucket');
-  const [timeBucket, setTimeBucket] = useState<'1min' | '5min' | '1hour' | '1day'>('5min');
+  const [timeBucket, setTimeBucket] = useState<'1min' | '5min' | '1hour' | '1day'>(
+    (initialConfig?.groupBy === 'time_bucket' ? (initialConfig?.timeBucket as any) : undefined) || '5min'
+  );
   const [chartType, setChartType] = useState<'line' | 'area' | 'bar' | 'table'>('line');
   const [isLoading, setIsLoading] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -53,6 +55,14 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
   // Load initial config when it changes
   useEffect(() => {
     if (initialConfig) {
+      console.log('[KPIBuilder] ===== LOADING INITIAL CONFIG =====');
+      console.log('[KPIBuilder] Received config:', {
+        metric: initialConfig.metric,
+        groupBy: initialConfig.groupBy,
+        timeBucket: initialConfig.timeBucket,
+        filters: initialConfig.filters
+      });
+      
       isLoadingFromConfig.current = true;
       setMetric(initialConfig.metric);
       
@@ -81,6 +91,13 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       setDistanceThreshold(initialConfig.filters.distanceThreshold ?? 2.0);
       setGroupBy(initialConfig.groupBy);
       setTimeBucket(initialConfig.timeBucket || '1hour');
+      
+      console.log('[KPIBuilder] State SET TO:', {
+        metric: initialConfig.metric,
+        groupBy: initialConfig.groupBy,
+        timeBucket: initialConfig.timeBucket || '1hour'
+      });
+      
       // Important: mark preset as custom so the preset effect does not overwrite loaded dates
       setTimePreset('custom');
       setCustomTimeRange(initialConfig.filters.timeRange);
@@ -93,6 +110,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
     
     // Cleanup function to prevent stale data
     return () => {
+      console.log('[KPIBuilder] ===== CLEANUP =====');
       setAggregatedData([]);
       setHasApplied(false);
     };
@@ -146,6 +164,16 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
 
   // Apply filters and query backend
   const handleApplyFilters = useCallback(async () => {
+    console.log('[KPIBuilder] ===== APPLY FILTERS CALLED =====');
+    console.log('[KPIBuilder] Current state:', {
+      metric,
+      groupBy,
+      timeBucket,
+      selectedClasses,
+      vestFilter,
+      timeRange: customTimeRange
+    });
+    
     // Skip class validation for close_calls metric (it uses hardcoded human vs vehicle logic)
     if (selectedClasses.length === 0 && metric !== 'close_calls') {
       setQueryError('Please select at least one class');
@@ -162,18 +190,23 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
       if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
         throw new Error('Invalid time range');
       }
-      // Transform UI groupBy to backend format
+      // Use the CURRENT state timeBucket so user changes take effect after loading a saved KPI
+      const actualTimeBucket = timeBucket;
+
+      // Transform UI groupBy to backend format using the actual timeBucket
       const transformedGroupBy = (kpiConfig.groupBy === 'time_bucket' ? 
-                 (timeBucket === '1day' ? 'day' : 
-                  timeBucket === '1hour' ? 'hour' :
-                  timeBucket === '5min' ? '5min' :
-                  timeBucket === '1min' ? '1min' : '5min') : 
+                 (actualTimeBucket === '1day' ? 'day' : 
+                  actualTimeBucket === '1hour' ? 'hour' :
+                  actualTimeBucket === '5min' ? '5min' :
+                  actualTimeBucket === '1min' ? '1min' : '5min') : 
                  kpiConfig.groupBy === 'class' ? 'class' : '5min') as 'hour' | 'day' | 'class' | '5min' | '1min';
 
       console.log('[KPIBuilder] Transform mapping:', {
         uiGroupBy: kpiConfig.groupBy,
-        uiTimeBucket: kpiConfig.groupBy === 'time_bucket' ? timeBucket : 'N/A',
+        uiTimeBucket: kpiConfig.groupBy === 'time_bucket' ? actualTimeBucket : 'N/A',
         backendGroupBy: transformedGroupBy,
+        stateTimeBucket: timeBucket,
+        configTimeBucket: initialConfig?.timeBucket,
         filters: {
           classes: kpiConfig.filters.classes,
           timeRange: {
@@ -283,7 +316,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
         handleApplyFilters();
       }, 150);
     }
-  }, [initialConfig, hasApplied, handleApplyFilters]);
+  }, [initialConfig, hasApplied]); // Removed handleApplyFilters from deps to prevent loop
 
   const allClasses = ['human', 'vehicle'];
 
@@ -374,6 +407,44 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
                     <SelectItem value="custom">Custom Range</SelectItem>
                   </SelectContent>
                 </Select>
+                
+                {/* Custom Date Range Inputs */}
+                {timePreset === 'custom' && (
+                  <div className="space-y-3 p-3 border rounded-md bg-muted/50">
+                    <div className="text-sm font-medium text-muted-foreground">Select Custom Date Range</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="from-date" className="text-xs">From Date</Label>
+                        <input
+                          id="from-date"
+                          type="datetime-local"
+                          value={customTimeRange.from.toISOString().slice(0, 16)}
+                          onChange={(e) => {
+                            const newFrom = new Date(e.target.value);
+                            setCustomTimeRange(prev => ({ ...prev, from: newFrom }));
+                          }}
+                          className="w-full px-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="to-date" className="text-xs">To Date</Label>
+                        <input
+                          id="to-date"
+                          type="datetime-local"
+                          value={customTimeRange.to.toISOString().slice(0, 16)}
+                          onChange={(e) => {
+                            const newTo = new Date(e.target.value);
+                            setCustomTimeRange(prev => ({ ...prev, to: newTo }));
+                          }}
+                          className="w-full px-2 py-1 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Current range: {customTimeRange.from.toLocaleString()} to {customTimeRange.to.toLocaleString()}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Class Filter */}
@@ -551,7 +622,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
               )}
 
               {groupBy === 'time_bucket' && (
-                <Select value={timeBucket} onValueChange={(v) => setTimeBucket(v as '1min' | '5min' | '1hour' | '1day')}>
+                <Select key={`timebucket-${timeBucket}`} value={timeBucket} onValueChange={(v) => setTimeBucket(v as '1min' | '5min' | '1hour' | '1day')}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -650,7 +721,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
 
         {/* Chart Preview */}
         <ChartPreview
-          key={`${metric}-${groupBy}-${JSON.stringify(kpiConfig.filters)}`}
+          key={`chart-${metric}-${groupBy}-${aggregatedData.length}-${Date.now()}`}
           data={aggregatedData}
           multiSeriesData={[]}
           seriesKeys={[]}
