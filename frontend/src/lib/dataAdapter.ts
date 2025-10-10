@@ -66,6 +66,7 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
           return result;
         })(),
         speedMin: mappedConfig.filters.speedMin,
+        areas: mappedConfig.filters.areas, // Add missing areas filter
       },
       groupBy: (mappedConfig.groupBy === 'time_bucket' ?
                (mappedConfig.timeBucket === '1day' ? 'day' : 
@@ -74,10 +75,11 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
                 mappedConfig.timeBucket === '1min' ? '1min' : '5min') :
                mappedConfig.groupBy === 'class' ? 'class' :
                mappedConfig.groupBy === 'area' ? 'area' :
-               mappedConfig.groupBy === 'asset_id' ? 'class' : // fetch class-grouped for top 10 client-side
+               mappedConfig.groupBy === 'asset_id' ? 'asset_id' : // now properly support asset_id grouping
                mappedConfig.groupBy === 'none' ? 'class' : // fetch class-grouped for total client-side
-               '5min') as 'hour' | 'day' | 'class' | 'area' | '5min' | '1min',
+               '5min') as 'hour' | 'day' | 'class' | 'area' | 'asset_id' | '5min' | '1min',
     };
+
 
     let results: { series?: Array<{ label?: string; time?: string; value?: number; timestamp?: string }> };
     if (mappedConfig.metric === 'close_calls') {
@@ -113,15 +115,7 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
       timestamp: item.time || item.timestamp,
     })) || [];
     
-    if (mappedConfig.groupBy === 'asset_id') {
-      // For asset_id, we need to fetch individual detections and compute top 10
-      // For now, return class-grouped data with a note that this is client-side top 10
-      processedSeries = processedSeries.slice(0, 10).map(item => ({
-        ...item,
-        label: `Asset ${item.label} (Top 10)`,
-        value: item.value
-      }));
-    } else if (mappedConfig.groupBy === 'none') {
+    if (mappedConfig.groupBy === 'none') {
       // For none, sum all values into a single total
       const total = processedSeries.reduce((sum, item) => sum + item.value, 0);
       processedSeries = [{
@@ -130,6 +124,8 @@ export async function queryDetections(config: KPIConfig): Promise<Array<{ label:
         timestamp: undefined
       }];
     }
+    
+    // Backend now handles area sorting numerically, so no frontend sorting needed
     
     return processedSeries;
   } catch (error) {

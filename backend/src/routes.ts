@@ -138,7 +138,7 @@ router.post('/aggregate', async (req: Request, res: Response) => {
 
     // Validate inputs
     const allowedMetrics = ['count', 'unique_ids', 'avg_speed'] as const;
-    const allowedGroups = ['hour', 'day', 'class', 'area', '5min', '1min'] as const;
+    const allowedGroups = ['hour', 'day', 'class', 'area', 'asset_id', '5min', '1min'] as const;
     if (!allowedMetrics.includes(metric)) {
       return res.status(400).json({ error: 'Invalid metric' });
     }
@@ -173,6 +173,9 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     } else if (groupBy === 'area') {
       groupExpr = `area`;
       selectTimeOrLabel = `area AS label`;
+    } else if (groupBy === 'asset_id') {
+      groupExpr = `id`;
+      selectTimeOrLabel = `id AS label`;
     } else {
       groupExpr = `class`;
       selectTimeOrLabel = `class AS label`;
@@ -185,12 +188,27 @@ router.post('/aggregate', async (req: Request, res: Response) => {
     if (metric === 'vest_violations') valueExpr = 'CAST(COUNT(*) AS REAL) AS value';
     if (metric === 'overspeed') valueExpr = 'CAST(COUNT(*) AS REAL) AS value';
 
+    // Special ORDER BY for different grouping types
+    let orderByClause = `${groupExpr} ASC`;
+    if (groupBy === 'area') {
+      orderByClause = `CAST(area AS INTEGER) ASC`;
+    } else if (groupBy === 'asset_id') {
+      // For asset_id, order by value descending to get top assets, then by id ascending for consistency
+      // Extract the expression part without the "AS value" alias
+      const valueExpression = valueExpr.replace(' AS value', '');
+      orderByClause = `${valueExpression} DESC, id ASC`;
+    }
+
+    // Add LIMIT for asset_id grouping to implement Top 10
+    const limitClause = groupBy === 'asset_id' ? 'LIMIT 10' : '';
+    
     const sql = `
       SELECT ${selectTimeOrLabel}, ${valueExpr}
       FROM detections
       ${whereSql}
       GROUP BY ${groupExpr}
-      ORDER BY ${groupExpr} ASC
+      ORDER BY ${orderByClause}
+      ${limitClause}
     `;
 
     console.log('[API /aggregate] SQL Query:', {

@@ -51,7 +51,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
     return dataToFormat.map(item => ({
       ...item,
       label: config.groupBy === 'time_bucket' 
-        ? formatTimestamp(item.label, config.groupBy, config.timeBucket as any)
+        ? formatTimestamp(item.label, config.groupBy, config.timeBucket as '1min' | '5min' | '1hour' | '1day')
         : formatLabel(item.label, config.groupBy)
     }));
   }, [data, multiSeriesData, useMultiSeries, config.groupBy, config.timeBucket]);
@@ -127,7 +127,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
             Showing {displayData.length} results{useMultiSeries ? ` across ${seriesKeys.length} classes` : ''}
             {config.groupBy === 'asset_id' && (
               <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                Top 10 (client-side)
+                Top 10
               </span>
             )}
           </p>
@@ -204,7 +204,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     // Find the original data point by matching the formatted label
                     const originalData = data.find(d => {
                       const formattedLabel = config.groupBy === 'time_bucket' 
-                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as any)
+                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as '1min' | '5min' | '1hour' | '1day')
                         : formatLabel(d.label, config.groupBy);
                       return formattedLabel === label;
                     });
@@ -270,7 +270,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     // Find the original data point by matching the formatted label
                     const originalData = data.find(d => {
                       const formattedLabel = config.groupBy === 'time_bucket' 
-                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as any)
+                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as '1min' | '5min' | '1hour' | '1day')
                         : formatLabel(d.label, config.groupBy);
                       return formattedLabel === label;
                     });
@@ -336,7 +336,7 @@ export function ChartPreview({ data, multiSeriesData, seriesKeys, chartType, isL
                     // Find the original data point by matching the formatted label
                     const originalData = data.find(d => {
                       const formattedLabel = config.groupBy === 'time_bucket' 
-                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as any)
+                        ? formatTimestamp(d.label, config.groupBy, config.timeBucket as '1min' | '5min' | '1hour' | '1day')
                         : formatLabel(d.label, config.groupBy);
                       return formattedLabel === label;
                     });

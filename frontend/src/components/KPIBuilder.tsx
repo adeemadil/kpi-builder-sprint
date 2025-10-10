@@ -205,6 +205,7 @@ export function KPIBuilder({ onBack, initialConfig }: KPIBuilderProps) {
         groupBy,
         timeBucket: groupBy === 'time_bucket' ? timeBucket : undefined,
       };
+
       
       
       // Use dataAdapter to handle all API calls, legacy metric mapping, and groupBy logic
