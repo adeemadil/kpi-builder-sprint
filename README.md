@@ -22,6 +22,8 @@ curl http://localhost:3001/api/health
 open http://localhost:8080
 ```
 
+See TESTING.md for scenario-wise curl examples.
+
 Useful Docker commands:
 ```bash
 docker compose ps
