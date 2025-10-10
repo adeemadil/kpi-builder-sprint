@@ -4,17 +4,23 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Install build tools for native deps only in builder
-RUN apk add --no-cache make g++ python3 py3-pip
+# Install build tools for native deps and Python for seeding
+RUN apk add --no-cache make g++ python3 py3-pip py3-pandas
+
+# Copy root package.json for workspace management
+COPY package.json package-lock.json* ./
 
 # Copy backend package files
-COPY backend/package.json backend/package-lock.json* ./backend/
+COPY backend/package.json ./backend/
+
+# Install root dependencies (concurrently for dev scripts)
+RUN --mount=type=cache,target=/root/.npm npm install
+
+# Install backend dependencies
 WORKDIR /app/backend
+RUN --mount=type=cache,target=/root/.npm npm install
 
-# Cache npm modules
-RUN --mount=type=cache,target=/root/.npm npm ci
-
-# Copy backend source files
+# Copy backend source files and build
 COPY backend/tsconfig.json ./
 COPY backend/src ./src
 RUN npm run build
@@ -24,42 +30,30 @@ FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install Python3 and pandas for data seeding (use Alpine package to avoid pip/PEP 668)
+# Install Python3 and pandas for data seeding
 RUN apk add --no-cache python3 py3-pandas \
     && rm -rf /var/cache/apk/*
 
-# Copy backend package files and install production dependencies
-COPY backend/package.json backend/package-lock.json* ./backend/
-WORKDIR /app/backend
-RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
+# Copy root package.json for workspace scripts
+COPY package.json ./
 
-# Copy build output
+# Copy backend package files and install production dependencies only
+COPY backend/package.json ./backend/
+WORKDIR /app/backend
+RUN --mount=type=cache,target=/root/.npm npm install --omit=dev
+
+# Copy build output from builder stage
 COPY --from=builder /app/backend/dist ./dist
 
 # Copy data assets and seeding script
 COPY backend/data ./data
 
-# Create startup script that handles seeding
-RUN echo '#!/bin/sh' > /app/start.sh && \
-    echo 'set -e' >> /app/start.sh && \
-    echo 'echo "🔌 Checking database..."' >> /app/start.sh && \
-    echo 'if [ ! -f "/app/data/kpi_builder.sqlite" ]; then' >> /app/start.sh && \
-    echo '  echo "📊 Database not found. Seeding database..."' >> /app/start.sh && \
-    echo '  cd /app/data' >> /app/start.sh && \
-    echo '  python3 seed_sqlite.py' >> /app/start.sh && \
-    echo '  cd /app' >> /app/start.sh && \
-    echo '  echo "✅ Database seeded successfully"' >> /app/start.sh && \
-    echo 'else' >> /app/start.sh && \
-    echo '  echo "✅ Database found"' >> /app/start.sh && \
-    echo 'fi' >> /app/start.sh && \
-    echo 'echo "🚀 Starting Node.js server..."' >> /app/start.sh && \
-    echo 'cd /app' >> /app/start.sh && \
-    echo 'exec node backend/dist/server.js' >> /app/start.sh && \
-    chmod +x /app/start.sh
-
-# Avoid running as root where possible
-RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
-USER nodejs
+# Install su-exec for user switching and create nodejs user
+RUN apk add --no-cache su-exec && \
+    addgroup -S nodejs && adduser -S nodejs -G nodejs && \
+    mkdir -p /app/data && chown -R nodejs:nodejs /app
 
 EXPOSE 3001
-CMD ["/app/start.sh"]
+
+# Seed database and start server
+CMD ["sh", "-c", "echo '🔌 Seeding database...' && cd /app/data && python3 /app/backend/data/seed_sqlite.py && echo '✅ Database seeded successfully' && echo '🚀 Starting backend server...' && cd /app/backend && exec su-exec nodejs npm start"]
